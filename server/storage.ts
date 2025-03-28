@@ -11,10 +11,17 @@ import {
   surveyQuestions, type SurveyQuestion, type InsertSurveyQuestion,
   surveyResponses, type SurveyResponse, type InsertSurveyResponse
 } from "@shared/schema";
+import type { SessionData, Store } from "express-session";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import connectPg from "connect-pg-simple";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
+import { Pool } from '@neondatabase/serverless';
 
 const MemoryStore = createMemoryStore(session);
+const PostgresSessionStore = connectPg(session);
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 export interface IStorage {
   // User methods
@@ -90,7 +97,7 @@ export interface IStorage {
   createEmailCampaign(campaign: InsertEmailCampaign): Promise<EmailCampaign>;
   updateEmailCampaign(id: number, campaign: Partial<InsertEmailCampaign>): Promise<EmailCampaign>;
 
-  sessionStore: session.SessionStore;
+  sessionStore: Store;
 }
 
 export class MemStorage implements IStorage {
@@ -118,7 +125,7 @@ export class MemStorage implements IStorage {
   private questionnaireCurrentId: number;
   private emailCampaignCurrentId: number;
 
-  sessionStore: session.SessionStore;
+  sessionStore: Store;
 
   constructor() {
     this.users = new Map();
@@ -279,7 +286,12 @@ export class MemStorage implements IStorage {
 
   async createProject(project: InsertProject): Promise<Project> {
     const id = this.projectCurrentId++;
-    const newProject: Project = { ...project, id };
+    const newProject: Project = { 
+      ...project, 
+      id,
+      progress: project.progress ?? null,
+      dueDate: project.dueDate ?? null
+    };
     this.projects.set(id, newProject);
     return newProject;
   }
@@ -319,7 +331,10 @@ export class MemStorage implements IStorage {
       materials: report.materials || null,
       equipment: report.equipment || null,
       safety: report.safety || null,
-      updatedAt: null
+      updatedAt: null,
+      status: report.status || null,
+      progress: report.progress || null,
+      weather: report.weather || null
     };
     this.dailyReports.set(id, newReport);
     return newReport;
@@ -356,7 +371,12 @@ export class MemStorage implements IStorage {
 
   async createAttendanceRecord(record: InsertAttendance): Promise<Attendance> {
     const id = this.attendanceCurrentId++;
-    const newRecord: Attendance = { ...record, id, createdAt: new Date() };
+    const newRecord: Attendance = { 
+      ...record, 
+      id, 
+      createdAt: new Date(),
+      workers: record.workers || null
+    };
     this.attendanceRecords.set(id, newRecord);
     return newRecord;
   }
@@ -378,7 +398,15 @@ export class MemStorage implements IStorage {
 
   async createIssue(issue: InsertIssue): Promise<Issue> {
     const id = this.issueCurrentId++;
-    const newIssue: Issue = { ...issue, id, createdAt: new Date() };
+    const newIssue: Issue = { 
+      ...issue, 
+      id, 
+      createdAt: new Date(),
+      description: issue.description || null,
+      status: issue.status || null,
+      priority: issue.priority || null,
+      createdBy: issue.createdBy || null
+    };
     this.issues.set(id, newIssue);
     return newIssue;
   }
@@ -410,7 +438,15 @@ export class MemStorage implements IStorage {
 
   async createPhoto(photo: InsertPhoto): Promise<Photo> {
     const id = this.photoCurrentId++;
-    const newPhoto: Photo = { ...photo, id, createdAt: new Date() };
+    const newPhoto: Photo = { 
+      ...photo, 
+      id, 
+      createdAt: new Date(),
+      title: photo.title || null,
+      description: photo.description || null,
+      createdBy: photo.createdBy || null,
+      reportId: photo.reportId || null
+    };
     this.photos.set(id, newPhoto);
     return newPhoto;
   }
@@ -426,7 +462,13 @@ export class MemStorage implements IStorage {
 
   async createBlogPost(post: InsertBlogPost): Promise<BlogPost> {
     const id = this.blogPostCurrentId++;
-    const newPost: BlogPost = { ...post, id, createdAt: new Date() };
+    const newPost: BlogPost = { 
+      ...post, 
+      id, 
+      createdAt: new Date(),
+      status: post.status || null,
+      createdBy: post.createdBy || null
+    };
     this.blogPosts.set(id, newPost);
     return newPost;
   }
@@ -442,10 +484,6 @@ export class MemStorage implements IStorage {
   }
 
   async deleteBlogPost(id: number): Promise<void> {
-    const existingPost = await this.getBlogPost(id);
-    if (!existingPost) {
-      throw new Error("Blog post not found");
-    }
     this.blogPosts.delete(id);
   }
 
@@ -456,7 +494,7 @@ export class MemStorage implements IStorage {
 
   async getSurveyQuestionsByCategory(category: string): Promise<SurveyQuestion[]> {
     return Array.from(this.surveyQuestions.values()).filter(
-      (question) => question.category === category
+      (question) => question.category === category,
     );
   }
 
@@ -469,7 +507,9 @@ export class MemStorage implements IStorage {
     const newQuestion: SurveyQuestion = { 
       ...question, 
       id, 
-      createdAt: new Date() 
+      createdAt: new Date(),
+      category: question.category || null,
+      active: question.active !== undefined ? question.active : true
     };
     this.surveyQuestions.set(id, newQuestion);
     return newQuestion;
@@ -486,10 +526,6 @@ export class MemStorage implements IStorage {
   }
 
   async deleteSurveyQuestion(id: number): Promise<void> {
-    const existingQuestion = await this.getSurveyQuestion(id);
-    if (!existingQuestion) {
-      throw new Error("Survey question not found");
-    }
     this.surveyQuestions.delete(id);
   }
 
@@ -507,7 +543,10 @@ export class MemStorage implements IStorage {
     const newResponse: SurveyResponse = { 
       ...response, 
       id, 
-      createdAt: new Date() 
+      createdAt: new Date(),
+      name: response.name || null,
+      company: response.company || null,
+      phone: response.phone || null
     };
     this.surveyResponses.set(id, newResponse);
     return newResponse;
@@ -515,42 +554,42 @@ export class MemStorage implements IStorage {
 
   // Survey Analytics methods
   async getSurveyAnalytics(): Promise<any> {
-    const responses = await this.getSurveyResponses();
     const questions = await this.getSurveyQuestions();
+    const responses = await this.getSurveyResponses();
     
-    // Initialize analytics object
-    const analytics = {
+    const responsesByDate = this.getResponsesByDate(responses);
+    const questionAnalytics = this.getQuestionAnalytics(questions, responses);
+    
+    return {
       totalResponses: responses.length,
-      responsesByDate: this.getResponsesByDate(responses),
-      questionAnalytics: this.getQuestionAnalytics(questions, responses)
+      responsesByDate,
+      questionAnalytics
     };
-    
-    return analytics;
   }
 
   async getSurveyAnalyticsByQuestionId(questionId: number): Promise<any> {
-    const responses = await this.getSurveyResponses();
     const question = await this.getSurveyQuestion(questionId);
     
     if (!question) {
       throw new Error("Survey question not found");
     }
     
-    // Count yes/no responses for this specific question
-    const analytics = this.analyzeQuestion(question, responses);
+    const responses = await this.getSurveyResponses();
     
-    return analytics;
+    return this.analyzeQuestion(question, responses);
   }
 
   private getResponsesByDate(responses: SurveyResponse[]): Record<string, number> {
-    const responsesByDate: Record<string, number> = {};
+    const result: Record<string, number> = {};
     
     responses.forEach(response => {
-      const date = new Date(response.createdAt).toISOString().split('T')[0];
-      responsesByDate[date] = (responsesByDate[date] || 0) + 1;
+      if (response.createdAt) {
+        const date = response.createdAt.toISOString().split('T')[0];
+        result[date] = (result[date] || 0) + 1;
+      }
     });
     
-    return responsesByDate;
+    return result;
   }
 
   private getQuestionAnalytics(questions: SurveyQuestion[], responses: SurveyResponse[]): any[] {
@@ -558,31 +597,31 @@ export class MemStorage implements IStorage {
   }
 
   private analyzeQuestion(question: SurveyQuestion, responses: SurveyResponse[]): any {
-    let yesCount = 0;
-    let noCount = 0;
-    let totalResponses = 0;
-    
-    responses.forEach(response => {
-      const answer = (response.answers as any[]).find(a => a.questionId === question.id);
-      if (answer) {
-        totalResponses++;
-        if (answer.answer === true) {
-          yesCount++;
-        } else {
-          noCount++;
-        }
-      }
+    const relevantResponses = responses.filter(r => {
+      if (!r.answers) return false;
+      const answersObj = typeof r.answers === 'string' ? JSON.parse(r.answers as string) : r.answers;
+      return answersObj && answersObj[`q${question.id}`] !== undefined;
     });
+    
+    const yesCount = relevantResponses.filter(r => {
+      const answersObj = typeof r.answers === 'string' ? JSON.parse(r.answers as string) : r.answers;
+      return answersObj[`q${question.id}`] === true;
+    }).length;
+    
+    const totalResponses = relevantResponses.length;
+    const yesPercentage = totalResponses ? Math.round((yesCount / totalResponses) * 100) : 0;
+    const noCount = totalResponses - yesCount;
+    const noPercentage = totalResponses ? Math.round((noCount / totalResponses) * 100) : 0;
     
     return {
       questionId: question.id,
       question: question.question,
-      category: question.category,
+      category: question.category || "General",
       totalResponses,
       yesCount,
       noCount,
-      yesPercentage: totalResponses ? Math.round((yesCount / totalResponses) * 100) : 0,
-      noPercentage: totalResponses ? Math.round((noCount / totalResponses) * 100) : 0
+      yesPercentage,
+      noPercentage
     };
   }
 
@@ -612,8 +651,10 @@ export class MemStorage implements IStorage {
     const newCampaign: EmailCampaign = { 
       ...campaign, 
       id, 
-      sentCount: 0,
-      createdAt: new Date() 
+      createdAt: new Date(),
+      status: campaign.status || null,
+      createdBy: campaign.createdBy || null,
+      sentCount: campaign.sentCount || 0
     };
     this.emailCampaigns.set(id, newCampaign);
     return newCampaign;
@@ -630,4 +671,399 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export class DatabaseStorage implements IStorage {
+  sessionStore: Store;
+
+  constructor() {
+    // Initialize PostgreSQL session store
+    this.sessionStore = new PostgresSessionStore({ 
+      pool,
+      createTableIfMissing: true
+    });
+  }
+
+  // User methods
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db.insert(users).values(insertUser).returning();
+    return user;
+  }
+
+  async updateStripeCustomerId(id: number, customerId: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ stripeCustomerId: customerId })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async updateUserStripeInfo(id: number, info: { customerId: string, subscriptionId: string }): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ 
+        stripeCustomerId: info.customerId,
+        stripeSubscriptionId: info.subscriptionId
+      })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  // Project methods
+  async getProjects(): Promise<Project[]> {
+    return await db.select().from(projects);
+  }
+
+  async getProject(id: number): Promise<Project | undefined> {
+    const [project] = await db.select().from(projects).where(eq(projects.id, id));
+    return project;
+  }
+
+  async createProject(project: InsertProject): Promise<Project> {
+    const [newProject] = await db.insert(projects).values(project).returning();
+    return newProject;
+  }
+
+  async updateProject(id: number, project: Partial<InsertProject>): Promise<Project> {
+    const [updatedProject] = await db
+      .update(projects)
+      .set(project)
+      .where(eq(projects.id, id))
+      .returning();
+    
+    if (!updatedProject) {
+      throw new Error("Project not found");
+    }
+    
+    return updatedProject;
+  }
+
+  // Daily Report methods
+  async getDailyReports(): Promise<DailyReport[]> {
+    return await db.select().from(dailyReports);
+  }
+
+  async getDailyReportsByProject(projectId: number): Promise<DailyReport[]> {
+    return await db
+      .select()
+      .from(dailyReports)
+      .where(eq(dailyReports.projectId, projectId));
+  }
+
+  async getDailyReport(id: number): Promise<DailyReport | undefined> {
+    const [report] = await db.select().from(dailyReports).where(eq(dailyReports.id, id));
+    return report;
+  }
+
+  async createDailyReport(report: InsertDailyReport): Promise<DailyReport> {
+    const [newReport] = await db.insert(dailyReports).values(report).returning();
+    return newReport;
+  }
+
+  async updateDailyReport(id: number, report: Partial<InsertDailyReport>): Promise<DailyReport> {
+    const [updatedReport] = await db
+      .update(dailyReports)
+      .set(report)
+      .where(eq(dailyReports.id, id))
+      .returning();
+    
+    if (!updatedReport) {
+      throw new Error("Daily report not found");
+    }
+    
+    return updatedReport;
+  }
+
+  // Attendance methods
+  async getAttendanceRecords(): Promise<Attendance[]> {
+    return await db.select().from(attendance);
+  }
+
+  async getAttendanceByProject(projectId: number): Promise<Attendance[]> {
+    return await db
+      .select()
+      .from(attendance)
+      .where(eq(attendance.projectId, projectId));
+  }
+
+  async getAttendanceRecord(id: number): Promise<Attendance | undefined> {
+    const [record] = await db.select().from(attendance).where(eq(attendance.id, id));
+    return record;
+  }
+
+  async createAttendanceRecord(record: InsertAttendance): Promise<Attendance> {
+    const [newRecord] = await db.insert(attendance).values(record).returning();
+    return newRecord;
+  }
+
+  // Issue methods
+  async getIssues(): Promise<Issue[]> {
+    return await db.select().from(issues);
+  }
+
+  async getIssuesByProject(projectId: number): Promise<Issue[]> {
+    return await db
+      .select()
+      .from(issues)
+      .where(eq(issues.projectId, projectId));
+  }
+
+  async getIssue(id: number): Promise<Issue | undefined> {
+    const [issue] = await db.select().from(issues).where(eq(issues.id, id));
+    return issue;
+  }
+
+  async createIssue(issue: InsertIssue): Promise<Issue> {
+    const [newIssue] = await db.insert(issues).values(issue).returning();
+    return newIssue;
+  }
+
+  async updateIssue(id: number, issue: Partial<InsertIssue>): Promise<Issue> {
+    const [updatedIssue] = await db
+      .update(issues)
+      .set(issue)
+      .where(eq(issues.id, id))
+      .returning();
+    
+    if (!updatedIssue) {
+      throw new Error("Issue not found");
+    }
+    
+    return updatedIssue;
+  }
+
+  // Photo methods
+  async getPhotos(): Promise<Photo[]> {
+    return await db.select().from(photos);
+  }
+
+  async getPhotosByProject(projectId: number): Promise<Photo[]> {
+    return await db
+      .select()
+      .from(photos)
+      .where(eq(photos.projectId, projectId));
+  }
+
+  async getPhoto(id: number): Promise<Photo | undefined> {
+    const [photo] = await db.select().from(photos).where(eq(photos.id, id));
+    return photo;
+  }
+
+  async createPhoto(photo: InsertPhoto): Promise<Photo> {
+    const [newPhoto] = await db.insert(photos).values(photo).returning();
+    return newPhoto;
+  }
+
+  // Blog methods
+  async getBlogPosts(): Promise<BlogPost[]> {
+    return await db.select().from(blogPosts);
+  }
+
+  async getBlogPost(id: number): Promise<BlogPost | undefined> {
+    const [post] = await db.select().from(blogPosts).where(eq(blogPosts.id, id));
+    return post;
+  }
+
+  async createBlogPost(post: InsertBlogPost): Promise<BlogPost> {
+    const [newPost] = await db.insert(blogPosts).values(post).returning();
+    return newPost;
+  }
+
+  async updateBlogPost(id: number, post: Partial<InsertBlogPost>): Promise<BlogPost> {
+    const [updatedPost] = await db
+      .update(blogPosts)
+      .set(post)
+      .where(eq(blogPosts.id, id))
+      .returning();
+    
+    if (!updatedPost) {
+      throw new Error("Blog post not found");
+    }
+    
+    return updatedPost;
+  }
+
+  async deleteBlogPost(id: number): Promise<void> {
+    await db.delete(blogPosts).where(eq(blogPosts.id, id));
+  }
+
+  // Survey Question methods
+  async getSurveyQuestions(): Promise<SurveyQuestion[]> {
+    return await db.select().from(surveyQuestions);
+  }
+
+  async getSurveyQuestionsByCategory(category: string): Promise<SurveyQuestion[]> {
+    return await db
+      .select()
+      .from(surveyQuestions)
+      .where(eq(surveyQuestions.category, category));
+  }
+
+  async getSurveyQuestion(id: number): Promise<SurveyQuestion | undefined> {
+    const [question] = await db.select().from(surveyQuestions).where(eq(surveyQuestions.id, id));
+    return question;
+  }
+
+  async createSurveyQuestion(question: InsertSurveyQuestion): Promise<SurveyQuestion> {
+    const [newQuestion] = await db.insert(surveyQuestions).values(question).returning();
+    return newQuestion;
+  }
+
+  async updateSurveyQuestion(id: number, question: Partial<InsertSurveyQuestion>): Promise<SurveyQuestion> {
+    const [updatedQuestion] = await db
+      .update(surveyQuestions)
+      .set(question)
+      .where(eq(surveyQuestions.id, id))
+      .returning();
+    
+    if (!updatedQuestion) {
+      throw new Error("Survey question not found");
+    }
+    
+    return updatedQuestion;
+  }
+
+  async deleteSurveyQuestion(id: number): Promise<void> {
+    await db.delete(surveyQuestions).where(eq(surveyQuestions.id, id));
+  }
+
+  // Survey Response methods
+  async getSurveyResponses(): Promise<SurveyResponse[]> {
+    return await db.select().from(surveyResponses);
+  }
+
+  async getSurveyResponse(id: number): Promise<SurveyResponse | undefined> {
+    const [response] = await db.select().from(surveyResponses).where(eq(surveyResponses.id, id));
+    return response;
+  }
+
+  async createSurveyResponse(response: InsertSurveyResponse): Promise<SurveyResponse> {
+    const [newResponse] = await db.insert(surveyResponses).values(response).returning();
+    return newResponse;
+  }
+
+  // Survey Analytics methods
+  async getSurveyAnalytics(): Promise<any> {
+    const questions = await this.getSurveyQuestions();
+    const responses = await this.getSurveyResponses();
+    
+    const responsesByDate = this.getResponsesByDate(responses);
+    const questionAnalytics = this.getQuestionAnalytics(questions, responses);
+    
+    return {
+      totalResponses: responses.length,
+      responsesByDate,
+      questionAnalytics
+    };
+  }
+
+  async getSurveyAnalyticsByQuestionId(questionId: number): Promise<any> {
+    const question = await this.getSurveyQuestion(questionId);
+    
+    if (!question) {
+      throw new Error("Survey question not found");
+    }
+    
+    const responses = await this.getSurveyResponses();
+    
+    return this.analyzeQuestion(question, responses);
+  }
+
+  private getResponsesByDate(responses: SurveyResponse[]): Record<string, number> {
+    const result: Record<string, number> = {};
+    
+    responses.forEach(response => {
+      if (response.createdAt) {
+        const date = response.createdAt.toISOString().split('T')[0];
+        result[date] = (result[date] || 0) + 1;
+      }
+    });
+    
+    return result;
+  }
+
+  private getQuestionAnalytics(questions: SurveyQuestion[], responses: SurveyResponse[]): any[] {
+    return questions.map(question => this.analyzeQuestion(question, responses));
+  }
+
+  private analyzeQuestion(question: SurveyQuestion, responses: SurveyResponse[]): any {
+    const relevantResponses = responses.filter(r => {
+      if (!r.answers) return false;
+      const answersObj = typeof r.answers === 'string' ? JSON.parse(r.answers as string) : r.answers;
+      return answersObj && answersObj[`q${question.id}`] !== undefined;
+    });
+    
+    const yesCount = relevantResponses.filter(r => {
+      const answersObj = typeof r.answers === 'string' ? JSON.parse(r.answers as string) : r.answers;
+      return answersObj[`q${question.id}`] === true;
+    }).length;
+    
+    const totalResponses = relevantResponses.length;
+    const yesPercentage = totalResponses ? Math.round((yesCount / totalResponses) * 100) : 0;
+    const noCount = totalResponses - yesCount;
+    const noPercentage = totalResponses ? Math.round((noCount / totalResponses) * 100) : 0;
+    
+    return {
+      questionId: question.id,
+      question: question.question,
+      category: question.category || "General",
+      totalResponses,
+      yesCount,
+      noCount,
+      yesPercentage,
+      noPercentage
+    };
+  }
+
+  // Questionnaire methods
+  async getQuestionnaires(): Promise<Questionnaire[]> {
+    return await db.select().from(questionnaires);
+  }
+
+  async createQuestionnaire(questionnaire: InsertQuestionnaire): Promise<Questionnaire> {
+    const [newQuestionnaire] = await db.insert(questionnaires).values(questionnaire).returning();
+    return newQuestionnaire;
+  }
+
+  // Email Campaign methods
+  async getEmailCampaigns(): Promise<EmailCampaign[]> {
+    return await db.select().from(emailCampaigns);
+  }
+
+  async getEmailCampaign(id: number): Promise<EmailCampaign | undefined> {
+    const [campaign] = await db.select().from(emailCampaigns).where(eq(emailCampaigns.id, id));
+    return campaign;
+  }
+
+  async createEmailCampaign(campaign: InsertEmailCampaign): Promise<EmailCampaign> {
+    const [newCampaign] = await db.insert(emailCampaigns).values(campaign).returning();
+    return newCampaign;
+  }
+
+  async updateEmailCampaign(id: number, campaign: Partial<InsertEmailCampaign>): Promise<EmailCampaign> {
+    const [updatedCampaign] = await db
+      .update(emailCampaigns)
+      .set(campaign)
+      .where(eq(emailCampaigns.id, id))
+      .returning();
+    
+    if (!updatedCampaign) {
+      throw new Error("Email campaign not found");
+    }
+    
+    return updatedCampaign;
+  }
+}
+
+// Use database storage
+export const storage = new DatabaseStorage();
