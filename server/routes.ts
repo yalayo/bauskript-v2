@@ -463,6 +463,148 @@ export async function registerRoutes(app: Express): Promise<Server> {
       next(error);
     }
   });
+  
+  // AI Blog Content Generation Routes
+  app.post("/api/blog/generate-from-topic", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { topicType, title } = req.body;
+      
+      if (!topicType || !title) {
+        return res.status(400).json({ message: "Topic type and title are required" });
+      }
+      
+      const { GoogleGenerativeAI } = await import("@google/generative-ai");
+      
+      // Initialize the Google Generative AI API with the key from environment
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ message: "Gemini API key not configured" });
+      }
+      
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      
+      // Create a prompt based on the topic type and title
+      let prompt = `Write a comprehensive, well-structured, and SEO-optimized blog post about "${title}" for a construction company's website. `;
+      
+      switch (topicType) {
+        case "construction-tips":
+          prompt += `Focus on practical tips, techniques, and best practices in construction. Include specific examples, address common challenges, and offer actionable advice for readers.`;
+          break;
+        case "industry-trends":
+          prompt += `Discuss current trends, innovations, and future directions in the construction industry. Analyze how these trends impact projects, businesses, and the workforce. Include statistics and expert insights where relevant.`;
+          break;
+        case "project-management":
+          prompt += `Focus on effective project management strategies in construction. Cover topics like scheduling, resource allocation, team coordination, and risk management. Provide practical advice for project managers.`;
+          break;
+        case "safety-guide":
+          prompt += `Create a comprehensive safety guide for construction sites. Cover essential safety protocols, equipment usage, regulatory compliance, and emergency procedures. Emphasize the importance of a safety-first culture.`;
+          break;
+        case "sustainability":
+          prompt += `Explore sustainable building practices, materials, and technologies. Discuss environmental benefits, regulatory requirements, and the long-term value of green construction approaches.`;
+          break;
+        case "cost-saving":
+          prompt += `Share effective cost-saving strategies for construction projects. Include tips on material selection, resource optimization, efficient scheduling, and avoiding common budget pitfalls.`;
+          break;
+        case "client-guide":
+          prompt += `Create a helpful guide for clients working with construction companies. Explain key processes, timeframes, common terminology, and what to expect throughout different project phases.`;
+          break;
+        default:
+          prompt += `Include an introduction, main body with key points, and a conclusion. Use appropriate headings, subheadings, and keep paragraphs concise and readable.`;
+      }
+      
+      prompt += `\n\nFormat the post with:
+      1. A compelling title (different from the provided title if you can improve it)
+      2. An engaging introduction
+      3. 3-5 main sections with proper headings
+      4. Bullet points where appropriate
+      5. A conclusion with key takeaways
+      6. Make the content approximately 800-1000 words
+      
+      Return the response in the following format:
+      TITLE: [Your generated title]
+      
+      [The full blog post content]`;
+      
+      // Generate content using Gemini
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+      
+      // Extract title and content from the generated text
+      const titleMatch = text.match(/TITLE:\s*(.+?)(?:\n\n|\n)/);
+      const generatedTitle = titleMatch ? titleMatch[1].trim() : title;
+      
+      // Remove the "TITLE:" part to get only the content
+      const content = text.replace(/TITLE:\s*(.+?)(?:\n\n|\n)/, "").trim();
+      
+      res.json({
+        title: generatedTitle,
+        content: content,
+      });
+    } catch (error) {
+      console.error("Error generating blog content from topic:", error);
+      res.status(500).json({ message: "Failed to generate content", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+  
+  app.post("/api/blog/generate-from-prompt", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { prompt } = req.body;
+      
+      if (!prompt) {
+        return res.status(400).json({ message: "Prompt is required" });
+      }
+      
+      const { GoogleGenerativeAI } = await import("@google/generative-ai");
+      
+      // Initialize the Google Generative AI API with the key from environment
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ message: "Gemini API key not configured" });
+      }
+      
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      
+      // Enhance the user's prompt with additional instructions for better formatting
+      const enhancedPrompt = `${prompt}\n\nFormat your response as a well-structured blog post with:
+      1. A compelling title 
+      2. An engaging introduction
+      3. Main body with proper sections and headings
+      4. Bullet points where appropriate
+      5. A conclusion with key takeaways
+      
+      Return the response in the following format:
+      TITLE: [Your generated title]
+      
+      [The full blog post content]`;
+      
+      // Generate content using Gemini
+      const result = await model.generateContent(enhancedPrompt);
+      const response = await result.response;
+      const text = response.text();
+      
+      // Extract title and content from the generated text
+      const titleMatch = text.match(/TITLE:\s*(.+?)(?:\n\n|\n)/);
+      const title = titleMatch ? titleMatch[1].trim() : "Generated Blog Post";
+      
+      // Remove the "TITLE:" part to get only the content
+      const content = text.replace(/TITLE:\s*(.+?)(?:\n\n|\n)/, "").trim();
+      
+      res.json({
+        title,
+        content,
+      });
+    } catch (error) {
+      console.error("Error generating blog content from custom prompt:", error);
+      res.status(500).json({ message: "Failed to generate content", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
 
   // Questionnaire routes
   app.post("/api/questionnaire", async (req, res, next) => {
