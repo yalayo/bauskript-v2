@@ -70,27 +70,18 @@ export function setupAuth(app: Express) {
   );
   
   // Google OAuth strategy
-  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REDIRECT_URI) {
     console.log('Setting up Google OAuth strategy with:');
     console.log('- Client ID:', process.env.GOOGLE_CLIENT_ID.substring(0, 8) + '...');
-    
-    // Determine the host for the callback URL automatically if not provided
-    let callbackUrl = process.env.GOOGLE_REDIRECT_URI;
-    if (!callbackUrl) {
-      // Default to current host
-      callbackUrl = "/api/oauth/callback";
-      console.log('- Using relative callback URL:', callbackUrl);
-    } else {
-      console.log('- Using configured callback URL:', callbackUrl);
-    }
+    console.log('- Using configured callback URL:', process.env.GOOGLE_REDIRECT_URI);
     
     passport.use(
       new GoogleStrategy(
         {
           clientID: process.env.GOOGLE_CLIENT_ID,
           clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-          callbackURL: callbackUrl,
-          scope: ['profile', 'email']
+          callbackURL: process.env.GOOGLE_REDIRECT_URI,
+          scope: ['profile', 'email', 'https://www.googleapis.com/auth/gmail.send', 'https://www.googleapis.com/auth/gmail.readonly']
         },
         async (accessToken, refreshToken, profile, done) => {
           try {

@@ -6,16 +6,29 @@ import { storage } from './storage';
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI || "http://localhost:3000/api/oauth/callback"
+  process.env.GOOGLE_REDIRECT_URI
 );
+
+// Log the redirect URI being used for debugging
+console.log('Gmail OAuth2 client using redirect URI:', process.env.GOOGLE_REDIRECT_URI);
 
 // Exchange authorization code for tokens
 export async function getTokensFromCode(code: string) {
   try {
+    console.log('Exchanging code for tokens with redirect URI:', process.env.GOOGLE_REDIRECT_URI);
     const { tokens } = await oauth2Client.getToken(code);
+    console.log('Successfully obtained tokens:', JSON.stringify({
+      access_token: tokens.access_token ? '✓ Present' : '✗ Missing',
+      refresh_token: tokens.refresh_token ? '✓ Present' : '✗ Missing', 
+      expiry_date: tokens.expiry_date ? '✓ Present' : '✗ Missing'
+    }));
     return tokens;
   } catch (error) {
     console.error('Error getting tokens:', error);
+    if (error instanceof Error) {
+      console.error('Error details:', error.message);
+      console.error('Error stack:', error.stack);
+    }
     throw new Error('Failed to get tokens from authorization code');
   }
 }
