@@ -1952,17 +1952,12 @@ export class DatabaseStorage implements IStorage {
   }
   
   async getCampaignProcessingInfo(id: number): Promise<{ 
+    campaignId: number;
     currentContact: Contact | null;
     nextContact: Contact | null;
-    progress: {
-      total: number;
-      processed: number;
-      scheduled: number;
-      remaining: number;
-      percentComplete: number;
-    };
-    lastProcessedAt: string | null;
-    estimatedCompletionTime: string | null;
+    totalProcessed: number;
+    totalScheduled: number;
+    remainingContacts: number;
   }> {
     // Check if campaign exists
     const campaign = await this.getEmailCampaign(id);
@@ -1981,94 +1976,36 @@ export class DatabaseStorage implements IStorage {
       campaignEmails.map(email => email.contactId)
     );
     
-    // Get all contacts for this campaign
-    const campaignContacts = await db
-      .select()
-      .from(campaignContacts)
-      .where(eq(campaignContacts.campaignId, id));
-      
-    // Total contacts for this campaign
-    const totalContacts = campaignContacts.length;
+    // Get all contacts that have emails associated with this campaign
+    const campaignContactIds = campaignEmails.map(email => email.contactId);
     
-    // Get contacts that have been scheduled for processing
+    // Get all contacts that are scheduled for processing
     const scheduledContacts = await db
       .select()
       .from(contacts)
-      .innerJoin(campaignContacts, eq(contacts.id, campaignContacts.contactId))
-      .where(
-        and(
-          eq(campaignContacts.campaignId, id),
-          eq(contacts.scheduledForProcessing, true)
-        )
-      );
-    
+      .where(eq(contacts.scheduledForProcessing, true));
+      
     // Find contacts that have been scheduled but not processed
     const unprocessedContacts = scheduledContacts.filter(
-      contact => !contact.contacts.processedAt && !processedContactIds.has(contact.contacts.id)
+      contact => !contact.processedAt && !processedContactIds.has(contact.id)
     );
     
     // Current contact is the first unprocessed contact
-    const currentContact = unprocessedContacts.length > 0 ? unprocessedContacts[0].contacts : null;
+    const currentContact = unprocessedContacts.length > 0 ? unprocessedContacts[0] : null;
     
     // Next contact is the second unprocessed contact
-    const nextContact = unprocessedContacts.length > 1 ? unprocessedContacts[1].contacts : null;
+    const nextContact = unprocessedContacts.length > 1 ? unprocessedContacts[1] : null;
     
-    // Get the latest processed email to determine last processed time
-    const latestProcessedEmail = campaignEmails.length > 0 
-      ? campaignEmails.sort((a, b) => 
-          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-        )[0]
-      : null;
-      
-    const lastProcessedAt = latestProcessedEmail?.createdAt?.toISOString() || null;
-    
-    // Calculate estimated completion time based on average processing rate
-    let estimatedCompletionTime = null;
-    if (campaignEmails.length > 1 && unprocessedContacts.length > 0) {
-      // Get the first and last email to calculate average processing rate
-      const sortedEmails = [...campaignEmails].sort((a, b) => 
-        new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
-      );
-      
-      const firstEmail = sortedEmails[0];
-      const lastEmail = sortedEmails[sortedEmails.length - 1];
-      
-      if (firstEmail?.createdAt && lastEmail?.createdAt) {
-        const timeElapsed = lastEmail.createdAt.getTime() - firstEmail.createdAt.getTime();
-        const emailCount = sortedEmails.length;
-        
-        // milliseconds per email
-        const averageProcessingTime = timeElapsed / emailCount;
-        
-        // Estimate completion time
-        const remainingTime = averageProcessingTime * unprocessedContacts.length;
-        const now = new Date();
-        const estimatedCompletion = new Date(now.getTime() + remainingTime);
-        
-        estimatedCompletionTime = estimatedCompletion.toISOString();
-      }
-    }
-    
-    // Calculate percent complete
-    const processed = processedContactIds.size;
-    const scheduled = scheduledContacts.length;
-    const remaining = unprocessedContacts.length;
-    const percentComplete = totalContacts > 0 
-      ? (processed / totalContacts) * 100 
-      : 0;
+    // We don't need the detailed calculations for the new interface implementation
+    // Just get the processed, scheduled, and remaining counts directly
     
     return {
+      campaignId: id,
       currentContact,
       nextContact,
-      progress: {
-        total: totalContacts,
-        processed,
-        scheduled,
-        remaining,
-        percentComplete
-      },
-      lastProcessedAt,
-      estimatedCompletionTime
+      totalProcessed: processedContactIds.size,
+      totalScheduled: scheduledContacts.length,
+      remainingContacts: unprocessedContacts.length
     };
   }
   
