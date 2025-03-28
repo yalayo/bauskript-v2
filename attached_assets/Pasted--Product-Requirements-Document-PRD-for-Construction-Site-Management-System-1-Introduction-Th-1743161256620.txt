@@ -1,0 +1,106 @@
+# Product Requirements Document (PRD) for Construction Site Management System
+
+## 1. Introduction
+The Construction Site Management System (CSMS) is designed to streamline the daily operations of construction projects by providing a digital platform for recording site activities, managing documentation, automating communications, and analyzing project progress. The system will also include a cold email outreach module, an internal dashboard for campaign tracking, a blog module, and various user engagement and monetization features.
+
+## 2. Objectives
+- Provide an intuitive digital construction diary for site managers.
+- Automate reporting and documentation of site progress, worker attendance, and project status.
+- Enable email marketing campaigns to engage potential users.
+- Support data extraction from Excel files using Google Gemini AI.
+- Facilitate payment options for different service tiers.
+- Generate and manage SEO-optimized blog posts.
+- Collect user insights through a landing page questionnaire.
+- Offer analytics dashboards for internal team members.
+
+## 3. Key Features
+### 3.1. Construction Diary & Reporting
+- **Daily Reports**: Create, edit, delete, and store site reports with automatic timestamping.
+- **Weather & Environment Tracking**: Record temperature, humidity, and other environmental factors.
+- **Work Progress Logging**: Document daily progress with descriptions, photos, and sketches.
+- **Attendance Tracking**: Log site workers and associated firms.
+- **Issue Management**: Record and track delays, defects, and project risks.
+- **PDF Report Generation**: Export reports in PDF format for documentation and compliance.
+- **Search & Filtering**: Retrieve reports using date ranges, firms, and issue types.
+
+### 3.2. Sketch & Image Annotation
+- **Freehand Drawing**: Create annotations on site images.
+- **Symbol Library**: Use construction-specific symbols for sketches.
+- **Text Overlay**: Add descriptive text and number references to images.
+- **Permanent Image Editing**: Save annotated images directly into reports.
+
+### 3.3. Cold Email Outreach Module
+- **Bulk Email Upload**: Import and process Excel files with over 100,000 emails.
+- **AI-Powered Personalization**: Use Google Gemini to customize cold emails.
+- **Gmail OAuth Authentication**: Send up to 400 emails per day per account.
+- **Internal Admin Dashboard**:
+  - Monitor campaign performance and statistics.
+  - Manually respond to replies.
+  - Track email engagement metrics.
+
+### 3.4. Blog & SEO Optimization
+- **AI-Powered Content Creation**: Generate SEO-optimized drafts based on user feedback.
+- **Approval Workflow**: Admins review and approve drafts before publishing.
+- **Publishing System**: Manage and schedule blog posts.
+
+### 3.5. User Acquisition & Monetization
+- **Landing Page with Questionnaire**:
+  - 20 Yes/No questions to assess potential user needs.
+  - Automatically add respondents to a waiting list.
+- **Supporter Payment Option**:
+  - One-time payment of €370 to support system development.
+- **Subscription & Service Tiers**:
+  - "Done For You": €35/month.
+  - "Done With You": One-time payment of €2,700.
+  - "Done By You": Installation & configuration for €950 + hourly support.
+- **Stripe Integration**: Handle all transactions securely.
+
+### 3.6. Data Processing & Analytics
+- **Excel Data Processing**:
+  - Users upload construction data in Excel format.
+  - Google Gemini AI extracts and categorizes relevant information.
+  - Store extracted data in the system for further analysis.
+- **Admin Dashboard**:
+  - Process responses from the questionnaire.
+  - Provide insights into common user challenges.
+  - Display key performance indicators (KPIs).
+
+## 4. User Roles & Permissions
+| Role          | Permissions |
+|--------------|------------|
+| Admin        | Full access, dashboard management, email campaign control, blog moderation, financial tracking |
+| Site Manager | Report creation/editing, team management, documentation uploads |
+| Worker      | View personal schedule and assigned tasks |
+| Public User  | Fill out questionnaires, join waiting lists, read blog posts |
+
+## 5. Technology Stack
+- **Frontend**: React.js with Tailwind CSS
+- **Backend**: Node.js with Express
+- **Database**: PostgreSQL or MongoDB
+- **AI Integration**: Google Gemini API
+- **Email Service**: Gmail API with OAuth
+- **Payment Processing**: Stripe
+- **Hosting & Deployment**: AWS/GCP
+
+## 6. Performance & Scalability Considerations
+- Handle large datasets efficiently (100,000+ emails).
+- Ensure smooth operation for concurrent users.
+- Optimize AI processing for fast response times.
+
+## 7. Security & Compliance
+- Secure OAuth authentication for Gmail API.
+- Data encryption for user and financial information.
+- GDPR compliance for user data handling.
+
+## 8. Timeline & Milestones
+1. **Month 1-2**: System architecture, UI/UX design, database schema.
+2. **Month 3-4**: Develop core construction diary features.
+3. **Month 5**: Implement email outreach module and AI integration.
+4. **Month 6**: Integrate payments, questionnaire landing page, and dashboards.
+5. **Month 7-8**: Testing, bug fixes, and security reviews.
+6. **Month 9**: Beta release and feedback collection.
+7. **Month 10**: Full system launch.
+
+## 9. Conclusion
+This system aims to digitize and optimize construction site management while incorporating AI-driven automation, marketing outreach, and monetization features. By leveraging modern technologies, it will improve efficiency for construction professionals and provide valuable industry insights through data analytics.
+
