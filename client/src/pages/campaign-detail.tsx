@@ -14,9 +14,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, ArrowLeft, BarChart3, Play, Pause, Calendar, CheckCircle2, UserRound } from "lucide-react";
+import { Loader2, ArrowLeft, BarChart3, Play, Pause, Calendar, CheckCircle2, UserRound, UserPlus } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import CampaignProcessingInfo from "@/components/email/campaign-processing-info";
+import ContactsCampaignAssign from "@/components/email/contacts-campaign-assign";
 
 export default function CampaignDetail() {
   const { id } = useParams();
@@ -323,22 +324,41 @@ export default function CampaignDetail() {
         </TabsContent>
         
         <TabsContent value="contacts">
-          <Card>
-            <CardHeader>
-              <CardTitle>Contacts</CardTitle>
-              <CardDescription>
-                Recipients of this campaign
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex justify-center items-center p-8">
-                <div className="text-center">
-                  <UserRound className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">Contact details for this campaign will appear here</p>
+          <div className="space-y-6">
+            <ContactsCampaignAssign 
+              campaignId={campaignId} 
+              onSuccess={() => {
+                queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns', campaignId, 'processing-info'] });
+                toast({
+                  title: "Contacts assigned",
+                  description: "Contacts have been successfully assigned to this campaign"
+                });
+              }} 
+            />
+            
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Campaign Contacts</CardTitle>
+                  <CardDescription>
+                    Recipients of this campaign
+                  </CardDescription>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+                <Button variant="outline" size="sm" className="gap-1">
+                  <UserPlus className="h-4 w-4" />
+                  <span>Add Contacts</span>
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="flex justify-center items-center p-8">
+                  <div className="text-center">
+                    <UserRound className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">Contact details for this campaign will appear here</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
         
         <TabsContent value="emails">

@@ -859,6 +859,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       next(error);
     }
   });
+
+  // Assign contacts to a campaign
+  app.post("/api/email-campaigns/:id/assign-contacts", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const campaignId = parseInt(req.params.id);
+      if (isNaN(campaignId)) {
+        return res.status(400).json({ error: "Invalid campaign ID" });
+      }
+      
+      const { contactIds } = req.body;
+      if (!Array.isArray(contactIds) || contactIds.some(id => isNaN(parseInt(id)))) {
+        return res.status(400).json({ error: "Invalid contact IDs" });
+      }
+      
+      const numAssigned = await storage.assignContactsToCampaign(
+        campaignId, 
+        contactIds.map(id => parseInt(id))
+      );
+      
+      res.json({ 
+        success: true, 
+        assigned: numAssigned 
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
   
   app.post("/api/process-email", async (req, res, next) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);

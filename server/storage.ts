@@ -113,6 +113,7 @@ export interface IStorage {
   scheduleEmailCampaign(id: number, date: Date): Promise<EmailCampaign>;
   pauseEmailCampaign(id: number): Promise<EmailCampaign>;
   resumeEmailCampaign(id: number): Promise<EmailCampaign>;
+  assignContactsToCampaign(campaignId: number, contactIds: number[]): Promise<number>;
 
   // Contact methods
   getContacts(page?: number, limit?: number): Promise<{ contacts: Contact[], total: number }>;
@@ -959,6 +960,51 @@ export class MemStorage implements IStorage {
     
     this.emailCampaigns.set(id, updatedCampaign);
     return updatedCampaign;
+  }
+  
+  async assignContactsToCampaign(campaignId: number, contactIds: number[]): Promise<number> {
+    // Verify campaign exists
+    const campaign = await this.getEmailCampaign(campaignId);
+    if (!campaign) {
+      throw new Error("Campaign not found");
+    }
+    
+    if (contactIds.length === 0) {
+      return 0;
+    }
+    
+    // Get contacts from the array
+    const contactsToAssign = contactIds
+      .map(id => this.contacts.get(id))
+      .filter(Boolean) as Contact[];
+    
+    if (contactsToAssign.length === 0) {
+      return 0;
+    }
+    
+    // For each contact, create an email in this campaign
+    for (const contact of contactsToAssign) {
+      const id = this.emailCurrentId++;
+      const email: Email = {
+        id,
+        contactId: contact.id,
+        campaignId,
+        subject: null,
+        content: null,
+        status: 'pending', 
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        sentAt: null,
+        openedAt: null,
+        clickedAt: null,
+        repliedAt: null,
+        reviewerId: null,
+        direction: 'outbound'
+      };
+      this.emails.set(id, email);
+    }
+    
+    return contactsToAssign.length;
   }
   
   async getCampaignProcessingInfo(id: number): Promise<{ 
@@ -1951,6 +1997,41 @@ export class DatabaseStorage implements IStorage {
     return updatedCampaign;
   }
   
+  async assignContactsToCampaign(campaignId: number, contactIds: number[]): Promise<number> {
+    // Verify campaign exists
+    const campaign = await this.getEmailCampaign(campaignId);
+    if (!campaign) {
+      throw new Error("Campaign not found");
+    }
+    
+    if (contactIds.length === 0) {
+      return 0;
+    }
+    
+    // Get contacts from the database
+    const contactsToAssign = await db
+      .select()
+      .from(contacts)
+      .where(inArray(contacts.id, contactIds));
+    
+    if (contactsToAssign.length === 0) {
+      return 0;
+    }
+    
+    // For each contact, create an email in this campaign
+    const emailsToInsert = contactsToAssign.map(contact => ({
+      contactId: contact.id,
+      campaignId,
+      subject: campaign.subject,
+      content: campaign.content,
+      status: 'pending',
+      direction: 'outbound'
+    }));
+    
+    const inserted = await db.insert(emails).values(emailsToInsert);
+    return contactsToAssign.length;
+  }
+
   async getCampaignProcessingInfo(id: number): Promise<{ 
     campaignId: number;
     currentContact: Contact | null;
