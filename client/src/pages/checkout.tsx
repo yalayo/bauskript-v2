@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import PricingCards from "@/components/payment/pricing-cards";
+import { Link } from "wouter";
 
 // Make sure to call `loadStripe` outside of a component's render to avoid
 // recreating the `Stripe` object on every render.
@@ -40,14 +41,14 @@ const CheckoutForm = ({ amount }: { amount: number }) => {
         description: error.message,
         variant: "destructive",
       });
+      setIsProcessing(false);
     } else {
       toast({
         title: "Payment Successful",
         description: "Thank you for your purchase!",
       });
+      // The confirmation happens on the return_url page
     }
-    
-    setIsProcessing(false);
   };
 
   return (
@@ -59,12 +60,12 @@ const CheckoutForm = ({ amount }: { amount: number }) => {
         className="w-full"
       >
         {isProcessing ? (
-          <span className="flex items-center">
-            <i className="fas fa-spinner fa-spin mr-2"></i>
+          <span className="flex items-center justify-center gap-2">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
             Processing...
           </span>
         ) : (
-          `Pay €${amount}`
+          `Pay €${(amount / 100).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
         )}
       </Button>
     </form>
@@ -74,36 +75,62 @@ const CheckoutForm = ({ amount }: { amount: number }) => {
 export default function Checkout() {
   const [clientSecret, setClientSecret] = useState("");
   const [selectedPlan, setSelectedPlan] = useState<{
+    id: string;
     name: string;
-    price: number;
     description: string;
+    price: number;
+    priceDisplay: string;
     features: string[];
+    subscription?: boolean;
   } | null>(null);
   const [showPricingCards, setShowPricingCards] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Only create PaymentIntent when a plan is selected
-    if (selectedPlan) {
+    // Only create PaymentIntent for one-time payments when a plan is selected
+    if (selectedPlan && !selectedPlan.subscription) {
       apiRequest("POST", "/api/create-payment-intent", { 
-        amount: selectedPlan.price,
+        amount: selectedPlan.price * 100, // Convert to cents for API
         currency: "eur" 
       })
         .then((res) => res.json())
         .then((data) => {
-          setClientSecret(data.clientSecret);
+          if (data.error) {
+            toast({
+              title: "Payment Error",
+              description: data.error.message || "Could not create payment intent",
+              variant: "destructive"
+            });
+          } else {
+            setClientSecret(data.clientSecret);
+          }
         })
         .catch(error => {
           console.error("Error creating payment intent:", error);
+          toast({
+            title: "Payment Error",
+            description: "Could not setup payment. Please try again.",
+            variant: "destructive"
+          });
         });
     }
-  }, [selectedPlan]);
+  }, [selectedPlan, toast]);
 
   const handlePlanSelect = (plan: {
+    id: string;
     name: string;
-    price: number;
     description: string;
+    price: number;
+    priceDisplay: string;
     features: string[];
+    subscription?: boolean;
   }) => {
+    // If subscription plan is selected, redirect to subscription page
+    if (plan.subscription) {
+      window.location.href = "/subscribe";
+      return;
+    }
+    
     setSelectedPlan(plan);
     setShowPricingCards(false);
   };
@@ -112,8 +139,8 @@ export default function Checkout() {
     return (
       <div className="p-4 md:p-6 max-w-5xl mx-auto">
         <div className="mb-10 text-center">
-          <h1 className="text-3xl font-bold text-slate-dark mb-3">Choose Your Plan</h1>
-          <p className="text-gray-500 max-w-2xl mx-auto">
+          <h1 className="text-3xl font-bold mb-3">Choose Your Plan</h1>
+          <p className="text-muted-foreground max-w-2xl mx-auto">
             Select the plan that best fits your needs. All plans include access to our construction site management system.
           </p>
         </div>
@@ -126,14 +153,14 @@ export default function Checkout() {
     return (
       <div className="p-4 md:p-6 max-w-3xl mx-auto text-center">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-dark mb-1">Checkout</h1>
-          <p className="text-gray-500">Please select a plan to proceed with checkout</p>
+          <h1 className="text-2xl font-bold mb-1">Checkout</h1>
+          <p className="text-muted-foreground">Please select a plan to proceed with checkout</p>
         </div>
         <Button 
           onClick={() => setShowPricingCards(true)}
           variant="outline"
         >
-          <i className="fas fa-arrow-left mr-2"></i>
+          <span className="mr-2">←</span>
           Back to Plans
         </Button>
       </div>
@@ -151,8 +178,8 @@ export default function Checkout() {
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-dark mb-1">Checkout</h1>
-        <p className="text-gray-500">Complete your payment to access the selected plan</p>
+        <h1 className="text-2xl font-bold mb-1">Checkout</h1>
+        <p className="text-muted-foreground">Complete your payment to access the selected plan</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -163,15 +190,15 @@ export default function Checkout() {
           <CardContent>
             <div className="flex justify-between mb-2">
               <span className="font-medium">{selectedPlan.name}</span>
-              <span className="font-bold">€{selectedPlan.price}</span>
+              <span className="font-bold">{selectedPlan.priceDisplay}</span>
             </div>
-            <p className="text-sm text-gray-500 mb-4">{selectedPlan.description}</p>
+            <p className="text-sm text-muted-foreground mb-4">{selectedPlan.description}</p>
             <div className="border-t pt-4">
               <p className="font-medium mb-2">Includes:</p>
               <ul className="space-y-2">
                 {selectedPlan.features.map((feature, index) => (
                   <li key={index} className="flex items-center text-sm">
-                    <i className="fas fa-check text-success mr-2"></i>
+                    <span className="text-primary mr-2">✓</span>
                     {feature}
                   </li>
                 ))}
@@ -180,7 +207,7 @@ export default function Checkout() {
             <div className="border-t pt-4 mt-4">
               <div className="flex justify-between font-bold">
                 <span>Total</span>
-                <span>€{selectedPlan.price}</span>
+                <span>{selectedPlan.priceDisplay}</span>
               </div>
             </div>
             <Button 
@@ -200,7 +227,7 @@ export default function Checkout() {
           </CardHeader>
           <CardContent>
             <Elements stripe={stripePromise} options={{ clientSecret }}>
-              <CheckoutForm amount={selectedPlan.price} />
+              <CheckoutForm amount={selectedPlan.price * 100} />
             </Elements>
           </CardContent>
         </Card>

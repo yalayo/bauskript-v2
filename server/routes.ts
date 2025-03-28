@@ -87,6 +87,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Daily Reports routes
+  // Routes with "/api/reports" prefix (original)
   app.get("/api/reports", async (req, res, next) => {
     try {
       const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : undefined;
@@ -125,6 +126,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertDailyReportSchema.parse(req.body);
       const report = await storage.createDailyReport(validatedData);
       res.status(201).json(report);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid data", errors: error.errors });
+      } else {
+        next(error);
+      }
+    }
+  });
+
+  app.patch("/api/reports/:id", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const id = parseInt(req.params.id);
+      const validatedData = insertDailyReportSchema.partial().parse(req.body);
+      const report = await storage.updateDailyReport(id, validatedData);
+      res.json(report);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid data", errors: error.errors });
+      } else {
+        next(error);
+      }
+    }
+  });
+  
+  // Routes with "/api/daily-reports" prefix (for consistent naming)
+  app.get("/api/daily-reports", async (req, res, next) => {
+    try {
+      const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : undefined;
+      let reports;
+      
+      if (projectId) {
+        reports = await storage.getDailyReportsByProject(projectId);
+      } else {
+        reports = await storage.getDailyReports();
+      }
+      
+      res.json(reports);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/daily-reports/:id", async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const report = await storage.getDailyReport(id);
+      if (report) {
+        res.json(report);
+      } else {
+        res.status(404).json({ message: "Report not found" });
+      }
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/daily-reports", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const validatedData = insertDailyReportSchema.parse(req.body);
+      const report = await storage.createDailyReport(validatedData);
+      res.status(201).json(report);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid data", errors: error.errors });
+      } else {
+        next(error);
+      }
+    }
+  });
+
+  app.patch("/api/daily-reports/:id", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const id = parseInt(req.params.id);
+      const validatedData = insertDailyReportSchema.partial().parse(req.body);
+      const report = await storage.updateDailyReport(id, validatedData);
+      res.json(report);
     } catch (error) {
       if (error instanceof z.ZodError) {
         res.status(400).json({ message: "Invalid data", errors: error.errors });
@@ -454,11 +537,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Stripe payment routes
   if (stripe) {
+    // One-time payment endpoint
     app.post("/api/create-payment-intent", async (req, res, next) => {
       try {
         const { amount, currency = "eur" } = req.body;
+        
+        // Convert to cents if not already
+        const amountInCents = typeof amount === 'number' ? Math.round(amount) : parseInt(amount);
+        
         const paymentIntent = await stripe.paymentIntents.create({
-          amount: Math.round(amount * 100), // Convert to cents
+          amount: amountInCents,
           currency,
         });
         res.json({ clientSecret: paymentIntent.client_secret });
@@ -466,8 +554,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(500).json({ message: "Error creating payment intent: " + error.message });
       }
     });
+
+    // Subscription endpoint
+    app.post('/api/get-or-create-subscription', async (req, res) => {
+      if (!req.isAuthenticated()) {
+        return res.sendStatus(401);
+      }
+
+      const user = req.user;
+
+      if (user.stripeSubscriptionId) {
+        try {
+          const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+          
+          // Return existing subscription data
+          res.send({
+            subscriptionId: subscription.id,
+            clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
+          });
+          return;
+        } catch (error: any) {
+          console.error("Error retrieving subscription:", error.message);
+          // If subscription not found, proceed to create a new one
+        }
+      }
+      
+      if (!user.email) {
+        return res.status(400).json({ message: "No user email on file" });
+      }
+
+      try {
+        // Create or retrieve customer
+        let customerId = user.stripeCustomerId;
+        
+        if (!customerId) {
+          const customer = await stripe.customers.create({
+            email: user.email,
+            name: user.fullName || user.username,
+          });
+          customerId = customer.id;
+          
+          // Update user with customer ID
+          await storage.updateStripeCustomerId(user.id, customerId);
+        }
+
+        // Get the price ID based on the plan
+        const { priceId } = req.body;
+        if (!priceId) {
+          return res.status(400).json({ message: "No price ID provided" });
+        }
+
+        // Create the subscription
+        const subscription = await stripe.subscriptions.create({
+          customer: customerId,
+          items: [{
+            price: priceId,
+          }],
+          payment_behavior: 'default_incomplete',
+          expand: ['latest_invoice.payment_intent'],
+        });
+
+        // Update user with subscription ID
+        await storage.updateUserStripeInfo(user.id, {
+          customerId,
+          subscriptionId: subscription.id
+        });
+    
+        res.send({
+          subscriptionId: subscription.id,
+          clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
+        });
+      } catch (error: any) {
+        console.error("Subscription error:", error.message);
+        return res.status(400).send({ error: { message: error.message } });
+      }
+    });
   } else {
+    // Fallback if Stripe is not configured
     app.post("/api/create-payment-intent", (req, res) => {
+      res.status(500).json({ message: "Stripe is not configured" });
+    });
+    
+    app.post("/api/get-or-create-subscription", (req, res) => {
       res.status(500).json({ message: "Stripe is not configured" });
     });
   }

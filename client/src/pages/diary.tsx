@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Link } from "wouter";
 
 const reportSchema = z.object({
   projectId: z.string().min(1, "Project is required"),
@@ -419,12 +420,12 @@ export default function DiaryPage() {
                       </div>
                     )}
                     <div className="flex justify-between mt-4">
-                      <a
-                        href={`/diary/${report.id}`}
+                      <Link
+                        to={`/diary/${report.id}`}
                         className="text-xs text-primary font-medium hover:underline"
                       >
                         View Details
-                      </a>
+                      </Link>
                       <div className="flex items-center text-xs text-gray-500">
                         <i className="fas fa-user mr-1"></i>
                         <span>You</span>

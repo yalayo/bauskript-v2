@@ -10,6 +10,7 @@ import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
 import DiaryPage from "@/pages/diary";
+import ReportDetailPage from "@/pages/diary/[id]";
 import AttendancePage from "@/pages/attendance";
 import PhotoGalleryPage from "@/pages/photo-gallery";
 import IssuesPage from "@/pages/issues";
@@ -17,6 +18,7 @@ import EmailCampaignsPage from "@/pages/email-campaigns";
 import BlogPage from "@/pages/blog";
 import SettingsPage from "@/pages/settings";
 import CheckoutPage from "@/pages/checkout";
+import SubscribePage from "@/pages/subscribe";
 import QuestionnairePage from "@/pages/questionnaire";
 
 function Router() {
@@ -26,6 +28,7 @@ function Router() {
         <ProtectedRoute path="/" component={Dashboard} />
         <Route path="/auth" component={AuthPage} />
         <ProtectedRoute path="/diary" component={DiaryPage} />
+        <ProtectedRoute path="/diary/:id" component={ReportDetailPage} />
         <ProtectedRoute path="/attendance" component={AttendancePage} />
         <ProtectedRoute path="/photos" component={PhotoGalleryPage} />
         <ProtectedRoute path="/issues" component={IssuesPage} />
@@ -33,6 +36,7 @@ function Router() {
         <ProtectedRoute path="/blog" component={BlogPage} />
         <ProtectedRoute path="/settings" component={SettingsPage} />
         <Route path="/checkout" component={CheckoutPage} />
+        <Route path="/subscribe" component={SubscribePage} />
         <Route path="/questionnaire" component={QuestionnairePage} />
         <Route component={NotFound} />
       </Switch>

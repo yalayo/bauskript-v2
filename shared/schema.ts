@@ -28,7 +28,12 @@ export const dailyReports = pgTable("daily_reports", {
   weather: jsonb("weather"),
   progress: text("progress"),
   status: text("status").default("draft"),
+  notes: text("notes"),
+  materials: text("materials"),
+  equipment: text("equipment"),
+  safety: text("safety"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
 });
 
 export const attendance = pgTable("attendance", {
@@ -110,6 +115,10 @@ export const insertDailyReportSchema = createInsertSchema(dailyReports).pick({
   weather: true,
   progress: true,
   status: true,
+  notes: true,
+  materials: true,
+  equipment: true,
+  safety: true,
 });
 
 export const insertAttendanceSchema = createInsertSchema(attendance).pick({

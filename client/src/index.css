@@ -55,7 +55,7 @@
 
 @layer components {
   .sidebar-link {
-    @apply flex items-center space-x-3 px-4 py-3 text-slate-dark hover:bg-gray-100 rounded-md transition-colors;
+    @apply flex items-center space-x-3 px-4 py-3 text-muted-foreground hover:bg-gray-100 rounded-md transition-colors;
   }
   
   .sidebar-link.active {

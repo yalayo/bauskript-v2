@@ -33,6 +33,7 @@ export interface IStorage {
   getDailyReportsByProject(projectId: number): Promise<DailyReport[]>;
   getDailyReport(id: number): Promise<DailyReport | undefined>;
   createDailyReport(report: InsertDailyReport): Promise<DailyReport>;
+  updateDailyReport(id: number, report: Partial<InsertDailyReport>): Promise<DailyReport>;
 
   // Attendance methods
   getAttendanceRecords(): Promise<Attendance[]>;
@@ -164,7 +165,15 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.userCurrentId++;
-    const user: User = { ...insertUser, id };
+    const user: User = { 
+      ...insertUser, 
+      id, 
+      stripeCustomerId: null, 
+      stripeSubscriptionId: null,
+      email: insertUser.email || null,
+      role: insertUser.role || null,
+      fullName: insertUser.fullName || null
+    };
     this.users.set(id, user);
     return user;
   }
@@ -236,9 +245,32 @@ export class MemStorage implements IStorage {
 
   async createDailyReport(report: InsertDailyReport): Promise<DailyReport> {
     const id = this.reportCurrentId++;
-    const newReport: DailyReport = { ...report, id, createdAt: new Date() };
+    const newReport: DailyReport = { 
+      ...report, 
+      id, 
+      createdAt: new Date(),
+      notes: report.notes || null,
+      materials: report.materials || null,
+      equipment: report.equipment || null,
+      safety: report.safety || null,
+      updatedAt: null
+    };
     this.dailyReports.set(id, newReport);
     return newReport;
+  }
+
+  async updateDailyReport(id: number, report: Partial<InsertDailyReport>): Promise<DailyReport> {
+    const existingReport = await this.getDailyReport(id);
+    if (!existingReport) {
+      throw new Error("Daily report not found");
+    }
+    const updatedReport = { 
+      ...existingReport, 
+      ...report,
+      updatedAt: new Date()
+    };
+    this.dailyReports.set(id, updatedReport);
+    return updatedReport;
   }
 
   // Attendance methods
