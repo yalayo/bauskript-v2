@@ -21,12 +21,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { InsertContact, insertContactSchema } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
-const formSchema = insertContactSchema.extend({});
+// Define a simple contact form schema
+const formSchema = z.object({
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  email: z.string().email("Valid email address is required"),
+  company: z.string().optional(),
+  position: z.string().optional(),
+  phone: z.string().optional(),
+  status: z.string().default("active"),
+  source: z.string().default("manual"),
+  notes: z.string().optional(),
+  category: z.string().optional(),
+});
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -49,7 +60,9 @@ export default function ContactForm({ onSuccess }: { onSuccess?: () => void }) {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (values: InsertContact) => {
+    mutationFn: async (values: FormValues) => {
+      // Log the values being submitted
+      console.log("Submitting contact data:", values);
       const res = await apiRequest("POST", "/api/contacts", values);
       return await res.json();
     },
