@@ -33,7 +33,12 @@ export default function AuthPage() {
   // Redirect if already logged in
   useEffect(() => {
     if (user) {
-      navigate("/");
+      // Redirect based on user role
+      if (user.role === "admin") {
+        navigate("/app/survey-analytics");
+      } else {
+        navigate("/app");
+      }
     }
   }, [user, navigate]);
 

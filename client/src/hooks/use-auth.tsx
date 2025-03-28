@@ -38,10 +38,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
+      
+      // Show success toast
       toast({
         title: "Login successful",
         description: `Welcome back, ${user.username}!`,
       });
+      
+      // Force a query refresh to ensure up-to-date user data
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
     },
     onError: (error: Error) => {
       toast({
@@ -59,10 +64,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
+      
+      // Show success toast
       toast({
         title: "Registration successful",
         description: `Welcome to ConstructPro, ${user.username}!`,
       });
+      
+      // Force a query refresh to ensure up-to-date user data
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
     },
     onError: (error: Error) => {
       toast({
