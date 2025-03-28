@@ -12,6 +12,11 @@ import { Link } from "wouter";
 const stripeKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || 'pk_test_placeholder';
 const stripePromise = loadStripe(stripeKey);
 
+// Function to check if Stripe key is a placeholder
+const isStripeKeyValid = () => {
+  return stripeKey !== 'pk_test_placeholder';
+};
+
 // Monthly subscription plans
 const subscriptionPlans = [
   {
@@ -20,7 +25,7 @@ const subscriptionPlans = [
     description: "Professional management solution with complete features",
     price: 35,
     interval: "month",
-    priceId: "price_your_stripe_price_id_here", // Replace with actual Stripe price ID
+    priceId: import.meta.env.VITE_STRIPE_PRICE_ID || "price_placeholder",
     features: [
       "Complete site management",
       "Unlimited projects",
@@ -142,13 +147,33 @@ export default function SubscribePage() {
       </div>
     );
   }
+  
+  if (!isStripeKeyValid()) {
+    return (
+      <div className="p-4 md:p-6 max-w-3xl mx-auto text-center">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold mb-1">Subscription Unavailable</h1>
+          <p className="text-muted-foreground">
+            The Stripe public key is not configured. Please add the VITE_STRIPE_PUBLIC_KEY
+            environment variable with a valid Stripe public key.
+          </p>
+        </div>
+        <Button asChild variant="outline">
+          <Link href="/">Go Back Home</Link>
+        </Button>
+      </div>
+    );
+  }
 
-  if (!selectedPlan.priceId) {
+  if (!selectedPlan.priceId || selectedPlan.priceId === "price_placeholder") {
     return (
       <div className="p-4 md:p-6 max-w-3xl mx-auto text-center">
         <div className="mb-6">
           <h1 className="text-2xl font-bold mb-1">Subscription Not Available</h1>
-          <p className="text-muted-foreground">Subscription is currently unavailable. Please contact support.</p>
+          <p className="text-muted-foreground">
+            The Stripe price ID is not configured. Please add the VITE_STRIPE_PRICE_ID 
+            environment variable with a valid Stripe price ID.
+          </p>
         </div>
         <Button asChild variant="outline">
           <Link href="/">Go Back Home</Link>

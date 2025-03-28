@@ -59,6 +59,7 @@ export interface IStorage {
   getBlogPost(id: number): Promise<BlogPost | undefined>;
   createBlogPost(post: InsertBlogPost): Promise<BlogPost>;
   updateBlogPost(id: number, post: Partial<InsertBlogPost>): Promise<BlogPost>;
+  deleteBlogPost(id: number): Promise<void>;
 
   // Questionnaire methods
   getQuestionnaires(): Promise<Questionnaire[]>;
@@ -373,6 +374,14 @@ export class MemStorage implements IStorage {
     const updatedPost = { ...existingPost, ...post };
     this.blogPosts.set(id, updatedPost);
     return updatedPost;
+  }
+
+  async deleteBlogPost(id: number): Promise<void> {
+    const existingPost = await this.getBlogPost(id);
+    if (!existingPost) {
+      throw new Error("Blog post not found");
+    }
+    this.blogPosts.delete(id);
   }
 
   // Questionnaire methods

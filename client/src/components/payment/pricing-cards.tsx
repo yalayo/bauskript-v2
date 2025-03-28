@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check } from "lucide-react";
 import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
 
 interface PricingPlan {
   id: string;
@@ -40,7 +41,7 @@ const plans: PricingPlan[] = [
     priceDisplay: "€35/month",
     popular: true,
     subscription: true,
-    priceId: "price_your_stripe_price_id_here", // This should be replaced with the actual Stripe price ID
+    priceId: import.meta.env.VITE_STRIPE_PRICE_ID || "price_placeholder",
     features: [
       "Complete site management",
       "Unlimited projects",
@@ -75,8 +76,19 @@ interface PricingCardsProps {
 
 export default function PricingCards({ onSelectPlan, standalone = false }: PricingCardsProps) {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
 
   const handlePlanSelect = (plan: PricingPlan) => {
+    // If this is a subscription plan but has no valid price ID, show a toast message
+    if (plan.subscription && (!plan.priceId || plan.priceId === "price_placeholder")) {
+      toast({
+        title: "Configuration Needed",
+        description: "The Stripe price ID is not configured. Please add the VITE_STRIPE_PRICE_ID environment variable.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     if (standalone) {
       if (plan.subscription) {
         // Navigate to subscription page for monthly plans

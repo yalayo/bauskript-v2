@@ -13,6 +13,11 @@ import { Link } from "wouter";
 const stripeKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || 'pk_test_placeholder';
 const stripePromise = loadStripe(stripeKey);
 
+// Function to check if Stripe key is a placeholder
+const isStripeKeyValid = () => {
+  return stripeKey !== 'pk_test_placeholder';
+};
+
 const CheckoutForm = ({ amount }: { amount: number }) => {
   const stripe = useStripe();
   const elements = useElements();
@@ -145,6 +150,23 @@ export default function Checkout() {
           </p>
         </div>
         <PricingCards onSelectPlan={handlePlanSelect} />
+      </div>
+    );
+  }
+
+  if (!isStripeKeyValid()) {
+    return (
+      <div className="p-4 md:p-6 max-w-3xl mx-auto text-center">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold mb-1">Checkout Unavailable</h1>
+          <p className="text-muted-foreground">
+            The Stripe public key is not configured. Please add the VITE_STRIPE_PUBLIC_KEY
+            environment variable with a valid Stripe public key.
+          </p>
+        </div>
+        <Button asChild variant="outline">
+          <Link href="/">Go Back Home</Link>
+        </Button>
       </div>
     );
   }

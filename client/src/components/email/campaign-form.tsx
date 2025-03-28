@@ -10,90 +10,92 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { BlogPost } from "@shared/schema";
+import { EmailCampaign } from "@shared/schema";
 
 // Form validation schema
-const blogPostSchema = z.object({
-  title: z.string().min(5, "Title must be at least 5 characters"),
-  content: z.string().min(50, "Content must be at least 50 characters"),
-  status: z.enum(["draft", "published"])
+const campaignSchema = z.object({
+  name: z.string().min(3, "Name must be at least 3 characters"),
+  subject: z.string().min(5, "Subject must be at least 5 characters"),
+  content: z.string().min(20, "Content must be at least 20 characters"),
+  status: z.enum(["draft", "active", "completed"])
 });
 
-type BlogFormValues = z.infer<typeof blogPostSchema>;
+type CampaignFormValues = z.infer<typeof campaignSchema>;
 
-interface BlogEditorProps {
+interface CampaignFormProps {
   onSuccess?: () => void;
-  blogPost?: BlogPost;
+  campaign?: EmailCampaign;
 }
 
-export default function BlogEditor({ onSuccess, blogPost }: BlogEditorProps) {
+export default function CampaignForm({ onSuccess, campaign }: CampaignFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   
-  const form = useForm<BlogFormValues>({
-    resolver: zodResolver(blogPostSchema),
+  const form = useForm<CampaignFormValues>({
+    resolver: zodResolver(campaignSchema),
     defaultValues: {
-      title: blogPost?.title || "",
-      content: blogPost?.content || "",
-      status: (blogPost?.status as "draft" | "published") || "draft"
+      name: campaign?.name || "",
+      subject: campaign?.subject || "",
+      content: campaign?.content || "",
+      status: (campaign?.status as "draft" | "active" | "completed") || "draft"
     }
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: BlogFormValues) => {
+    mutationFn: async (data: CampaignFormValues) => {
       const response = await apiRequest(
         "POST", 
-        "/api/blog", 
+        "/api/email-campaigns", 
         data
       );
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/blog"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/email-campaigns"] });
       toast({
         title: "Success",
-        description: "Blog post created successfully",
+        description: "Email campaign created successfully",
       });
       if (onSuccess) onSuccess();
     },
     onError: (error: Error) => {
       toast({
         title: "Error",
-        description: `Failed to create blog post: ${error.message}`,
+        description: `Failed to create email campaign: ${error.message}`,
         variant: "destructive",
       });
     }
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (data: BlogFormValues) => {
+    mutationFn: async (data: CampaignFormValues) => {
       const response = await apiRequest(
         "PATCH", 
-        `/api/blog/${blogPost?.id}`, 
+        `/api/email-campaigns/${campaign?.id}`, 
         data
       );
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/blog"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/email-campaigns"] });
       toast({
         title: "Success",
-        description: "Blog post updated successfully",
+        description: "Email campaign updated successfully",
       });
       if (onSuccess) onSuccess();
     },
     onError: (error: Error) => {
       toast({
         title: "Error",
-        description: `Failed to update blog post: ${error.message}`,
+        description: `Failed to update email campaign: ${error.message}`,
         variant: "destructive",
       });
     }
   });
 
-  const onSubmit = (data: BlogFormValues) => {
+  const onSubmit = (data: CampaignFormValues) => {
     setIsSubmitting(true);
-    if (blogPost) {
+    if (campaign) {
       updateMutation.mutate(data);
     } else {
       createMutation.mutate(data);
@@ -106,12 +108,26 @@ export default function BlogEditor({ onSuccess, blogPost }: BlogEditorProps) {
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <FormField
           control={form.control}
-          name="title"
+          name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Title</FormLabel>
+              <FormLabel>Campaign Name</FormLabel>
               <FormControl>
-                <Input placeholder="Enter blog post title" {...field} />
+                <Input placeholder="Enter campaign name" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="subject"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Email Subject</FormLabel>
+              <FormControl>
+                <Input placeholder="Enter email subject line" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -123,11 +139,11 @@ export default function BlogEditor({ onSuccess, blogPost }: BlogEditorProps) {
           name="content"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Content</FormLabel>
+              <FormLabel>Email Content</FormLabel>
               <FormControl>
                 <Textarea 
-                  placeholder="Write your blog post content here..."
-                  className="min-h-[300px]"
+                  placeholder="Write your email content here..."
+                  className="min-h-[200px]"
                   {...field} 
                 />
               </FormControl>
@@ -153,7 +169,8 @@ export default function BlogEditor({ onSuccess, blogPost }: BlogEditorProps) {
                 </FormControl>
                 <SelectContent>
                   <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="published">Published</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -169,10 +186,10 @@ export default function BlogEditor({ onSuccess, blogPost }: BlogEditorProps) {
             {isSubmitting ? (
               <span className="flex items-center">
                 <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-t-transparent border-white"></div>
-                {blogPost ? "Updating..." : "Creating..."}
+                {campaign ? "Updating..." : "Create Campaign"}
               </span>
             ) : (
-              blogPost ? "Update Post" : "Create Post"
+              campaign ? "Update Campaign" : "Create Campaign"
             )}
           </Button>
         </div>

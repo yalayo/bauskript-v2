@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BlogPost } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import BlogEditor from "@/components/blog/blog-editor";
 import BlogList from "@/components/blog/blog-list";
@@ -20,7 +20,7 @@ export default function BlogPage() {
   // Filter posts based on active tab
   const filteredPosts = posts.filter((post) => {
     if (activeTab === "all") return true;
-    return post.status.toLowerCase() === activeTab.toLowerCase();
+    return post.status?.toLowerCase() === activeTab.toLowerCase();
   });
 
   if (isLoading) {

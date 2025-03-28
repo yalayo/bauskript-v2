@@ -21,7 +21,7 @@ let stripe: Stripe | undefined;
 
 if (stripeSecretKey) {
   stripe = new Stripe(stripeSecretKey, {
-    apiVersion: "2023-10-16",
+    apiVersion: "2023-10-16" as any,
   });
 }
 
@@ -444,6 +444,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/blog/:id", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteBlogPost(id);
+      res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // Questionnaire routes
   app.post("/api/questionnaire", async (req, res, next) => {
     try {
@@ -568,9 +580,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
           
           // Return existing subscription data
+          // Type assertion to properly handle expanded objects
+          const latestInvoice = subscription.latest_invoice as any;
+          const paymentIntent = latestInvoice?.payment_intent;
+          
           res.send({
             subscriptionId: subscription.id,
-            clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
+            clientSecret: paymentIntent?.client_secret,
           });
           return;
         } catch (error: any) {
@@ -620,9 +636,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           subscriptionId: subscription.id
         });
     
+        // Type assertion to properly handle expanded objects
+        const latestInvoice = subscription.latest_invoice as any;
+        const paymentIntent = latestInvoice?.payment_intent;
+        
         res.send({
           subscriptionId: subscription.id,
-          clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
+          clientSecret: paymentIntent?.client_secret,
         });
       } catch (error: any) {
         console.error("Subscription error:", error.message);
