@@ -766,17 +766,8 @@ export class MemStorage implements IStorage {
     
     responses.forEach(response => {
       if (response.createdAt) {
-        try {
-          // Handle both Date objects and string dates
-          const dateObj = response.createdAt instanceof Date 
-            ? response.createdAt 
-            : new Date(response.createdAt);
-          
-          const date = dateObj.toISOString().split('T')[0];
-          result[date] = (result[date] || 0) + 1;
-        } catch (error) {
-          console.error("Invalid date format:", response.createdAt);
-        }
+        const date = response.createdAt.toISOString().split('T')[0];
+        result[date] = (result[date] || 0) + 1;
       }
     });
     

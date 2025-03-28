@@ -1035,10 +1035,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Send to storage to process
       const importResult = await storage.bulkImportContacts(contacts, req.user!.id);
       
-      // Return result statistics
+      // Fetch the newly imported contacts
+      const recentlyImportedContacts = await storage.getRecentlyImportedContacts(req.user!.id);
+      
+      // Return result statistics and imported contacts
       res.status(200).json({
         message: `Imported ${importResult.imported} contacts successfully`,
-        stats: importResult
+        stats: importResult,
+        contacts: recentlyImportedContacts
       });
       
     } catch (error) {

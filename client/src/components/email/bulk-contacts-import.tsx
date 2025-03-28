@@ -16,6 +16,14 @@ interface BulkImportStats {
   errors: string[];
 }
 
+interface ImportedContact {
+  id: number;
+  email: string;
+  category?: string | null;
+  company?: string | null;
+  createdAt: string;
+}
+
 interface BulkContactsImportProps {
   onImportComplete?: (stats: BulkImportStats) => void;
 }
@@ -25,7 +33,9 @@ export default function BulkContactsImport({ onImportComplete }: BulkContactsImp
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [importStats, setImportStats] = useState<BulkImportStats | null>(null);
+  const [importedContacts, setImportedContacts] = useState<ImportedContact[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [showAllContacts, setShowAllContacts] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   
@@ -106,6 +116,7 @@ export default function BulkContactsImport({ onImportComplete }: BulkContactsImp
     setIsUploading(true);
     setUploadProgress(10);
     setError(null);
+    setImportedContacts([]);
 
     try {
       const formData = new FormData();
@@ -131,6 +142,11 @@ export default function BulkContactsImport({ onImportComplete }: BulkContactsImp
 
       const data = await response.json();
       setImportStats(data.stats);
+      
+      // Store the imported contacts
+      if (data.contacts && Array.isArray(data.contacts)) {
+        setImportedContacts(data.contacts);
+      }
       
       // Call the callback if provided
       if (onImportComplete) {
@@ -265,6 +281,47 @@ export default function BulkContactsImport({ onImportComplete }: BulkContactsImp
                       ))}
                     </div>
                   </>
+                )}
+                
+                <div className="col-span-2 flex items-center justify-between mt-4">
+                  <h4 className="font-semibold">Imported Contacts</h4>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setShowAllContacts(!showAllContacts)}
+                    className="text-xs"
+                  >
+                    {showAllContacts ? "Hide List" : "Show List"}
+                  </Button>
+                </div>
+                
+                {showAllContacts && importedContacts.length > 0 && (
+                  <div className="col-span-2 mt-2 border rounded-md overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="px-4 py-2 text-left font-medium">Email</th>
+                          <th className="px-4 py-2 text-left font-medium">Category</th>
+                          <th className="px-4 py-2 text-left font-medium">Company</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {importedContacts.map((contact) => (
+                          <tr key={contact.id} className="hover:bg-muted/20">
+                            <td className="px-4 py-2">{contact.email}</td>
+                            <td className="px-4 py-2">{contact.category || '-'}</td>
+                            <td className="px-4 py-2">{contact.company || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {importedContacts.length > 50 && (
+                      <div className="p-2 text-center text-xs text-muted-foreground bg-muted/10">
+                        Showing {importedContacts.length} contacts. {importStats.imported - importedContacts.length > 0 && 
+                          `${importStats.imported - importedContacts.length} more contacts were imported but not shown here.`}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </AlertDescription>
