@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 import { EmailCampaign } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Trash2, PauseCircle, PlayCircle, Calendar, ExternalLink, Eye } from "lucide-react";
+import { Trash2, PauseCircle, PlayCircle, Calendar, ExternalLink, Eye, Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import {
   Table,
@@ -31,10 +32,24 @@ export default function CampaignList() {
   const { toast } = useToast();
   const [selectedCampaign, setSelectedCampaign] = useState<number | null>(null);
   const [, navigate] = useLocation();
+  const { user } = useAuth();
 
   const { data: campaigns, isLoading } = useQuery<EmailCampaign[]>({
     queryKey: ["/api/email-campaigns"],
     retry: false,
+  });
+  
+  // Define the response type for Gmail status
+  type GmailStatusResponse = {
+    authenticated: boolean;
+    email: string;
+  };
+  
+  // Check Gmail authorization status
+  const { data: gmailStatus } = useQuery<GmailStatusResponse>({
+    queryKey: ["/api/gmail/status"],
+    queryFn: getQueryFn<GmailStatusResponse>({ on401: "returnNull" }),
+    enabled: !!user
   });
 
   const deleteMutation = useMutation({
@@ -77,6 +92,38 @@ export default function CampaignList() {
       });
     },
   });
+  
+  // Start campaign mutation
+  const startCampaignMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await apiRequest('POST', `/api/email-campaigns/${id}/start`);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Campaign Started",
+        description: "The campaign is now running and will send emails based on configured settings"
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/email-campaigns"] });
+    },
+    onError: (error: any) => {
+      // Check if it's a Gmail authentication error
+      if (error.status === 400 && error.data?.needsGmailAuth) {
+        toast({
+          title: "Gmail Authentication Required",
+          description: "Please connect your Gmail account to start this campaign",
+          variant: "destructive"
+        });
+        navigate('/gmail-auth');
+      } else {
+        toast({
+          title: "Error",
+          description: `Failed to start campaign: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          variant: "destructive"
+        });
+      }
+    }
+  });
 
   const handleDelete = (id: number) => {
     deleteMutation.mutate(id);
@@ -85,6 +132,10 @@ export default function CampaignList() {
 
   const handleStatusChange = (id: number, status: string) => {
     updateStatusMutation.mutate({ id, status });
+  };
+  
+  const handleStartCampaign = (id: number) => {
+    startCampaignMutation.mutate(id);
   };
 
   const getStatusBadge = (status: string | null) => {
@@ -97,6 +148,8 @@ export default function CampaignList() {
         return <Badge variant="default">Running</Badge>;
       case "paused":
         return <Badge variant="outline">Paused</Badge>;
+      case "stopped":
+        return <Badge variant="destructive">Stopped</Badge>;
       case "completed":
         return <Badge>Completed</Badge>;
       default:
@@ -159,16 +212,55 @@ export default function CampaignList() {
                       <PauseCircle className="h-4 w-4" />
                     </Button>
                   )}
-                  {(campaign.status === "paused" || campaign.status === "draft") && (
+                  
+                  {/* Resume button for paused campaigns */}
+                  {campaign.status === "paused" && (
                     <Button
                       variant="outline"
                       size="icon"
                       onClick={() => handleStatusChange(campaign.id, "running")}
-                      title="Start Campaign"
+                      title="Resume Campaign"
                     >
                       <PlayCircle className="h-4 w-4" />
                     </Button>
                   )}
+                  
+                  {/* Start button for draft campaigns */}
+                  {campaign.status === "draft" && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => handleStartCampaign(campaign.id)}
+                      disabled={startCampaignMutation.isPending || !gmailStatus?.authenticated}
+                      title={!gmailStatus?.authenticated ? 
+                        "Gmail authentication required to start campaigns" : 
+                        "Start Campaign"}
+                    >
+                      {startCampaignMutation.isPending ? 
+                        <Loader2 className="h-4 w-4 animate-spin" /> : 
+                        <PlayCircle className="h-4 w-4" />
+                      }
+                    </Button>
+                  )}
+                  
+                  {/* Start button for stopped campaigns - Uses proper start endpoint */}
+                  {campaign.status === "stopped" && (
+                    <Button
+                      variant={startCampaignMutation.isPending ? "secondary" : "outline"}
+                      size="icon"
+                      onClick={() => handleStartCampaign(campaign.id)}
+                      disabled={startCampaignMutation.isPending || !gmailStatus?.authenticated}
+                      title={!gmailStatus?.authenticated ? 
+                        "Gmail authentication required to start campaigns" : 
+                        "Start Campaign"}
+                    >
+                      {startCampaignMutation.isPending ? 
+                        <Loader2 className="h-4 w-4 animate-spin" /> : 
+                        <PlayCircle className="h-4 w-4" />
+                      }
+                    </Button>
+                  )}
+                  
                   {campaign.status === "draft" && !campaign.scheduledDate && (
                     <Button
                       variant="outline"
