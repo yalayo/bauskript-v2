@@ -4,6 +4,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -20,7 +21,15 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Loader2, RefreshCw } from "lucide-react";
+import { 
+  Pagination, 
+  PaginationContent, 
+  PaginationItem, 
+  PaginationLink, 
+  PaginationNext, 
+  PaginationPrevious 
+} from "@/components/ui/pagination";
+import { Loader2, RefreshCw, Search } from "lucide-react";
 
 interface ContactsCampaignAssignProps {
   campaignId: number;
@@ -30,6 +39,10 @@ interface ContactsCampaignAssignProps {
 export default function ContactsCampaignAssign({ campaignId, onSuccess }: ContactsCampaignAssignProps) {
   const [selectedContacts, setSelectedContacts] = useState<number[]>([]);
   const [availableContacts, setAvailableContacts] = useState<any[]>([]);
+  const [filteredContacts, setFilteredContacts] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const contactsPerPage = 10;
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -87,8 +100,49 @@ export default function ContactsCampaignAssign({ campaignId, onSuccess }: Contac
       );
       
       setAvailableContacts(filtered);
+      setFilteredContacts(filtered); // Initialize filtered contacts with all available contacts
     }
   }, [contactsData, campaignContactsData]);
+  
+  // Handle search and filtering
+  useEffect(() => {
+    if (!availableContacts) return;
+    
+    let result = [...availableContacts];
+    
+    // Apply search filter if search term exists
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      result = result.filter(contact => {
+        const name = [contact.firstName, contact.lastName].filter(Boolean).join(' ').toLowerCase();
+        const email = (contact.email || '').toLowerCase();
+        const company = (contact.company || '').toLowerCase();
+        
+        return name.includes(searchLower) || 
+               email.includes(searchLower) || 
+               company.includes(searchLower);
+      });
+    }
+    
+    setFilteredContacts(result);
+    setCurrentPage(1); // Reset to first page when search changes
+  }, [availableContacts, searchTerm]);
+  
+  // Handle search input change
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+  };
+  
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredContacts.length / contactsPerPage);
+  const indexOfLastContact = currentPage * contactsPerPage;
+  const indexOfFirstContact = indexOfLastContact - contactsPerPage;
+  const currentContacts = filteredContacts.slice(indexOfFirstContact, indexOfLastContact);
+  
+  // Change page
+  const goToPage = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+  };
   
   // Mutation to assign contacts to campaign
   const assignMutation = useMutation({
@@ -135,14 +189,27 @@ export default function ContactsCampaignAssign({ campaignId, onSuccess }: Contac
     );
   };
   
-  // Select all contacts
+  // Select all visible contacts on current page
   const selectAll = () => {
-    if (availableContacts.length > 0) {
-      if (selectedContacts.length === availableContacts.length) {
-        setSelectedContacts([]);
-      } else {
-        setSelectedContacts(availableContacts.map(c => c.id));
-      }
+    // Check if all current page contacts are selected
+    const allSelected = currentContacts.every(c => selectedContacts.includes(c.id));
+    
+    if (allSelected) {
+      // Remove current page contacts from selection
+      setSelectedContacts(prev => 
+        prev.filter(id => !currentContacts.some(c => c.id === id))
+      );
+    } else {
+      // Add current page contacts to selection, avoiding duplicates
+      setSelectedContacts(prev => {
+        const combined = [...prev];
+        currentContacts.forEach(contact => {
+          if (!combined.includes(contact.id)) {
+            combined.push(contact.id);
+          }
+        });
+        return combined;
+      });
     }
   };
   
@@ -200,47 +267,114 @@ export default function ContactsCampaignAssign({ campaignId, onSuccess }: Contac
       </CardHeader>
       <CardContent>
         {availableContacts.length > 0 ? (
-          <div className="border rounded-md">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">
-                    <Checkbox 
-                      checked={availableContacts.length > 0 && selectedContacts.length === availableContacts.length}
-                      onCheckedChange={selectAll}
-                    />
-                  </TableHead>
-                  <TableHead>Name/Email</TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Category</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {availableContacts.map((contact) => (
-                  <TableRow key={contact.id}>
-                    <TableCell>
+          <>
+            <div className="flex items-center space-x-2 mb-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search contacts..."
+                  className="pl-8"
+                  value={searchTerm}
+                  onChange={handleSearchChange}
+                />
+              </div>
+            </div>
+            
+            <div className="border rounded-md">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
                       <Checkbox 
-                        checked={selectedContacts.includes(contact.id)}
-                        onCheckedChange={() => toggleContact(contact.id)}
+                        checked={currentContacts.length > 0 && 
+                                currentContacts.every(c => selectedContacts.includes(c.id))}
+                        onCheckedChange={selectAll}
                       />
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        {(contact.firstName || contact.lastName) && (
-                          <div className="font-medium">
-                            {[contact.firstName, contact.lastName].filter(Boolean).join(' ')}
-                          </div>
-                        )}
-                        <div className="text-sm text-muted-foreground">{contact.email}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>{contact.company || '-'}</TableCell>
-                    <TableCell>{contact.category || '-'}</TableCell>
+                    </TableHead>
+                    <TableHead>Name/Email</TableHead>
+                    <TableHead>Company</TableHead>
+                    <TableHead>Category</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {currentContacts.length > 0 ? (
+                    currentContacts.map((contact) => (
+                      <TableRow key={contact.id}>
+                        <TableCell>
+                          <Checkbox 
+                            checked={selectedContacts.includes(contact.id)}
+                            onCheckedChange={() => toggleContact(contact.id)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            {(contact.firstName || contact.lastName) && (
+                              <div className="font-medium">
+                                {[contact.firstName, contact.lastName].filter(Boolean).join(' ')}
+                              </div>
+                            )}
+                            <div className="text-sm text-muted-foreground">{contact.email}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>{contact.company || '-'}</TableCell>
+                        <TableCell>{contact.category || '-'}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">
+                        No contacts match your search
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="mt-4">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        onClick={() => currentPage > 1 && goToPage(currentPage - 1)}
+                        className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                    
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <PaginationItem key={page}>
+                        <PaginationLink
+                          onClick={() => goToPage(page)}
+                          isActive={page === currentPage}
+                          className="cursor-pointer"
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    
+                    <PaginationItem>
+                      <PaginationNext 
+                        onClick={() => currentPage < totalPages && goToPage(currentPage + 1)}
+                        className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
+            
+            <div className="mt-2 text-xs text-muted-foreground text-center">
+              {searchTerm ? (
+                <>Showing {currentContacts.length} of {filteredContacts.length} matching contacts</>
+              ) : (
+                <>Showing {indexOfFirstContact + 1}-{Math.min(indexOfLastContact, filteredContacts.length)} of {filteredContacts.length} contacts</>
+              )}
+            </div>
+          </>
         ) : (
           <div className="text-center py-8 text-muted-foreground">
             {contactsData?.contacts?.length > 0 
