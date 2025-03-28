@@ -601,7 +601,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Survey Analytics routes
+  // Survey Analytics API
   app.get("/api/survey-analytics", async (req, res, next) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     if (req.user?.role !== "admin") return res.sendStatus(403);
@@ -626,6 +626,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       next(error);
     }
   });
+  
+
 
   // Email campaigns routes
   app.get("/api/email-campaigns", async (req, res, next) => {

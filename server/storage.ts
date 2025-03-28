@@ -18,7 +18,7 @@ import session from "express-session";
 import createMemoryStore from "memorystore";
 import connectPg from "connect-pg-simple";
 import { db } from "./db";
-import { eq, and, isNull, inArray, sql } from "drizzle-orm";
+import { eq, and, isNull, inArray, sql, asc, desc } from "drizzle-orm";
 import { Pool } from '@neondatabase/serverless';
 
 const MemoryStore = createMemoryStore(session);
@@ -680,6 +680,7 @@ export class MemStorage implements IStorage {
   }
 
   // Survey Analytics methods
+
   async getSurveyAnalytics(): Promise<any> {
     const questions = await this.getSurveyQuestions();
     const responses = await this.getSurveyResponses();
@@ -687,13 +688,60 @@ export class MemStorage implements IStorage {
     const responsesByDate = this.getResponsesByDate(responses);
     const questionAnalytics = this.getQuestionAnalytics(questions, responses);
     
+    // Get unique companies
+    const uniqueCompanies = new Set(
+      responses
+        .filter(r => r.company)
+        .map(r => r.company?.toLowerCase())
+    ).size;
+    
+    // Get the latest response date
+    const latestResponseDate = responses.length > 0
+      ? responses.reduce((latest, response) => {
+          if (!response.createdAt) return latest;
+          const responseDate = new Date(response.createdAt);
+          return responseDate > latest ? responseDate : latest;
+        }, new Date(0))
+      : null;
+    
+    // Get recent responses, sorted by createdAt desc
+    const recentResponses = [...responses]
+      .sort((a, b) => {
+        if (!a.createdAt) return 1;
+        if (!b.createdAt) return -1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      })
+      .slice(0, 5) // Get top 5 most recent
+      .map(response => {
+        // Add answer details to each response
+        const answersObj = typeof response.answers === 'string' 
+          ? JSON.parse(response.answers as string) 
+          : response.answers;
+          
+        const formattedAnswers = Object.entries(answersObj || {})
+          .map(([key, value]) => {
+            const questionId = parseInt(key.replace('q', ''));
+            return {
+              questionId,
+              answer: value
+            };
+          });
+          
+        return {
+          ...response,
+          answers: formattedAnswers
+        };
+      });
+    
     return {
       totalResponses: responses.length,
+      uniqueCompanies,
+      latestResponseDate: latestResponseDate ? latestResponseDate.toISOString() : null,
       responsesByDate,
-      questionAnalytics
+      questionAnalytics,
+      recentResponses
     };
   }
-
   async getSurveyAnalyticsByQuestionId(questionId: number): Promise<any> {
     const question = await this.getSurveyQuestion(questionId);
     
@@ -1440,24 +1488,86 @@ export class DatabaseStorage implements IStorage {
   async getSurveyQuestions(): Promise<SurveyQuestion[]> {
     return await db.select().from(surveyQuestions);
   }
-
-  async getSurveyQuestionsByCategory(category: string): Promise<SurveyQuestion[]> {
-    return await db
-      .select()
-      .from(surveyQuestions)
-      .where(eq(surveyQuestions.category, category));
-  }
-
+  
   async getSurveyQuestion(id: number): Promise<SurveyQuestion | undefined> {
     const [question] = await db.select().from(surveyQuestions).where(eq(surveyQuestions.id, id));
     return question;
   }
 
+  async getSurveyQuestionsByCategory(category: string): Promise<SurveyQuestion[]> {
+    return await db
+      .select()
+      .from(surveyQuestions)
+      .where(eq(surveyQuestions.category, category))
+      .orderBy(surveyQuestions.orderIndex);
+  }
+  
   async createSurveyQuestion(question: InsertSurveyQuestion): Promise<SurveyQuestion> {
     const [newQuestion] = await db.insert(surveyQuestions).values(question).returning();
     return newQuestion;
   }
 
+  async getSurveyAnalytics(): Promise<any> {
+    const questions = await this.getSurveyQuestions();
+    const responses = await this.getSurveyResponses();
+    
+    const responsesByDate = this.getResponsesByDate(responses);
+    const questionAnalytics = this.getQuestionAnalytics(questions, responses);
+    
+    // Get unique companies
+    const uniqueCompanies = new Set(
+      responses
+        .filter(r => r.company)
+        .map(r => r.company?.toLowerCase())
+    ).size;
+    
+    // Get the latest response date
+    const latestResponseDate = responses.length > 0
+      ? responses.reduce((latest, response) => {
+          if (!response.createdAt) return latest;
+          const responseDate = new Date(response.createdAt);
+          return responseDate > latest ? responseDate : latest;
+        }, new Date(0))
+      : null;
+    
+    // Get recent responses, sorted by createdAt desc
+    const recentResponses = [...responses]
+      .sort((a, b) => {
+        if (!a.createdAt) return 1;
+        if (!b.createdAt) return -1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      })
+      .slice(0, 5) // Get top 5 most recent
+      .map(response => {
+        // Add answer details to each response
+        const answersObj = typeof response.answers === 'string' 
+          ? JSON.parse(response.answers as string) 
+          : response.answers;
+          
+        const formattedAnswers = Object.entries(answersObj || {})
+          .map(([key, value]) => {
+            const questionId = parseInt(key.replace('q', ''));
+            return {
+              questionId,
+              answer: value
+            };
+          });
+          
+        return {
+          ...response,
+          answers: formattedAnswers
+        };
+      });
+    
+    return {
+      totalResponses: responses.length,
+      uniqueCompanies,
+      latestResponseDate: latestResponseDate ? latestResponseDate.toISOString() : null,
+      responsesByDate,
+      questionAnalytics,
+      recentResponses
+    };
+  }
   async updateSurveyQuestion(id: number, question: Partial<InsertSurveyQuestion>): Promise<SurveyQuestion> {
     const [updatedQuestion] = await db
       .update(surveyQuestions)
@@ -1492,19 +1602,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Survey Analytics methods
-  async getSurveyAnalytics(): Promise<any> {
-    const questions = await this.getSurveyQuestions();
-    const responses = await this.getSurveyResponses();
-    
-    const responsesByDate = this.getResponsesByDate(responses);
-    const questionAnalytics = this.getQuestionAnalytics(questions, responses);
-    
-    return {
-      totalResponses: responses.length,
-      responsesByDate,
-      questionAnalytics
-    };
-  }
 
   async getSurveyAnalyticsByQuestionId(questionId: number): Promise<any> {
     const question = await this.getSurveyQuestion(questionId);

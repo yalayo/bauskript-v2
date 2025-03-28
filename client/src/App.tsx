@@ -22,6 +22,7 @@ import CheckoutPage from "@/pages/checkout";
 import SubscribePage from "@/pages/subscribe";
 import QuestionnairePage from "@/pages/questionnaire";
 import SurveyAnalyticsPage from "@/pages/survey-analytics";
+import LandingPage from "@/pages/landing-page";
 
 function Router() {
   return (
@@ -42,6 +43,7 @@ function Router() {
         <Route path="/checkout" component={CheckoutPage} />
         <Route path="/subscribe" component={SubscribePage} />
         <Route path="/questionnaire" component={QuestionnairePage} />
+        <Route path="/landing" component={LandingPage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
