@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, ArrowLeft, BarChart3, Play, Pause, Calendar, CheckCircle2, UserRound, UserPlus, PlayCircle, StopCircle } from "lucide-react";
+import { Loader2, ArrowLeft, BarChart3, Play, Pause, Calendar, CheckCircle2, UserRound, UserPlus, PlayCircle, StopCircle, RotateCw } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import CampaignProcessingInfo from "@/components/email/campaign-processing-info";
 import ContactsCampaignAssign from "@/components/email/contacts-campaign-assign";
@@ -191,12 +191,37 @@ export default function CampaignDetail() {
     }
   });
   
+  // Replay campaign mutation (for completed or stopped campaigns)
+  const replayMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', `/api/email-campaigns/${campaignId}/replay`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns', campaignId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns', campaignId, 'processing-info'] });
+      toast({
+        title: "Campaign Replayed",
+        description: "The campaign has been reset and restarted with the same contacts"
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Failed to replay campaign: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive"
+      });
+    }
+  });
+  
   // Handle campaign actions
   const handleResume = () => resumeMutation.mutate();
   const handlePause = () => pauseMutation.mutate();
   const handleStart = () => startMutation.mutate();
   const handleStop = () => stopMutation.mutate();
   const handleProcessEmail = () => processEmailMutation.mutate();
+  const handleReplay = () => replayMutation.mutate();
   
   if (isLoading) {
     return (
@@ -331,6 +356,20 @@ export default function CampaignDetail() {
               >
                 {processEmailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                 Process Next Email
+              </Button>
+            )}
+            
+            {/* Replay button for completed or stopped campaigns */}
+            {(campaign.status === 'completed' || campaign.status === 'stopped') && (
+              <Button 
+                onClick={handleReplay}
+                variant="secondary"
+                disabled={replayMutation.isPending || !(gmailStatus?.authenticated)}
+                className="gap-2"
+                title={!gmailStatus?.authenticated ? "Gmail authentication required to replay campaigns" : ""}
+              >
+                {replayMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
+                Replay Campaign
               </Button>
             )}
           </div>

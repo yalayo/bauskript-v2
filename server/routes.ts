@@ -1167,6 +1167,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       next(error);
     }
   });
+  
+  app.post("/api/email-campaigns/:id/replay", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Check Gmail authentication status before replaying
+      try {
+        // Verify Gmail authentication status
+        if (!req.user?.googleAccessToken) {
+          return res.status(400).json({ 
+            error: "Gmail authentication required",
+            needsGmailAuth: true
+          });
+        }
+        
+        // Try to get Gmail service to verify token is valid
+        await getGmailService(req.user);
+      } catch (error) {
+        console.error("Gmail authentication error:", error);
+        return res.status(400).json({ 
+          error: "Gmail authentication failed. Please reconnect your Gmail account.",
+          needsGmailAuth: true
+        });
+      }
+      
+      // Call the replay method which will reset all emails and campaign stats
+      const updatedCampaign = await storage.replayEmailCampaign(id);
+      
+      // Start the email processing for this campaign
+      await startCampaignProcessing(id);
+      
+      res.json(updatedCampaign);
+    } catch (error) {
+      next(error);
+    }
+  });
 
   // Assign contacts to a campaign
   app.post("/api/email-campaigns/:id/assign-contacts", async (req, res, next) => {

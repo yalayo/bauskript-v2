@@ -113,6 +113,7 @@ export interface IStorage {
   scheduleEmailCampaign(id: number, date: Date): Promise<EmailCampaign>;
   pauseEmailCampaign(id: number): Promise<EmailCampaign>;
   resumeEmailCampaign(id: number): Promise<EmailCampaign>;
+  replayEmailCampaign(id: number): Promise<EmailCampaign>;
   assignContactsToCampaign(campaignId: number, contactIds: number[]): Promise<number>;
 
   // Contact methods
@@ -962,6 +963,46 @@ export class MemStorage implements IStorage {
     return updatedCampaign;
   }
   
+  async replayEmailCampaign(id: number): Promise<EmailCampaign> {
+    const campaign = await this.getEmailCampaign(id);
+    if (!campaign) {
+      throw new Error("Email campaign not found");
+    }
+    
+    // Reset all emails in this campaign to pending status
+    const campaignEmails = Array.from(this.emails.values())
+      .filter(email => email.campaignId === id && (email.status === 'sent' || email.status === 'failed'));
+      
+    for (const email of campaignEmails) {
+      const resetEmail = {
+        ...email,
+        status: 'pending',
+        sentAt: null,
+        openedAt: null,
+        clickedAt: null,
+        repliedAt: null
+      };
+      this.emails.set(email.id, resetEmail);
+    }
+    
+    // Update the campaign status to running with fresh stats
+    const updatedCampaign = {
+      ...campaign,
+      status: 'running',
+      updatedAt: new Date(),
+      startedAt: new Date(),
+      completedAt: null,
+      lastSentAt: null,
+      sentCount: 0,
+      openCount: 0,
+      clickCount: 0,
+      replyCount: 0
+    };
+    
+    this.emailCampaigns.set(id, updatedCampaign);
+    return updatedCampaign;
+  }
+  
   async assignContactsToCampaign(campaignId: number, contactIds: number[]): Promise<number> {
     // Verify campaign exists
     const campaign = await this.getEmailCampaign(campaignId);
@@ -989,17 +1030,18 @@ export class MemStorage implements IStorage {
         id,
         contactId: contact.id,
         campaignId,
-        subject: null,
-        content: null,
+        subject: `Email for ${contact.email}`,
+        content: `This is a pending email for the campaign.`,
         status: 'pending', 
         createdAt: new Date(),
-        updatedAt: new Date(),
         sentAt: null,
         openedAt: null,
         clickedAt: null,
         repliedAt: null,
-        reviewerId: null,
-        direction: 'outbound'
+        reviewedById: null,
+        direction: 'outbound',
+        generatedByAI: false,
+        aiPrompt: null
       };
       this.emails.set(id, email);
     }
@@ -1986,6 +2028,53 @@ export class DatabaseStorage implements IStorage {
       .set({ 
         status,
         updatedAt: new Date()
+      })
+      .where(eq(emailCampaigns.id, id))
+      .returning();
+    
+    if (!updatedCampaign) {
+      throw new Error("Email campaign not found");
+    }
+    
+    return updatedCampaign;
+  }
+  
+  async replayEmailCampaign(id: number): Promise<EmailCampaign> {
+    // Get the campaign to ensure it exists
+    const campaign = await this.getEmailCampaign(id);
+    if (!campaign) {
+      throw new Error("Email campaign not found");
+    }
+    
+    // Reset all the emails in this campaign to 'pending' status
+    await db
+      .update(emails)
+      .set({
+        status: 'pending',
+        sentAt: null,
+        openedAt: null,
+        clickedAt: null,
+        repliedAt: null
+      })
+      .where(and(
+        eq(emails.campaignId, id),
+        inArray(emails.status, ['sent', 'failed'])
+      ));
+      
+    // Update the campaign status to running with fresh stats
+    const [updatedCampaign] = await db
+      .update(emailCampaigns)
+      .set({
+        status: 'running',
+        statusMessage: 'Campaign replayed by user',
+        updatedAt: new Date(),
+        startedAt: new Date(),
+        completedAt: null,
+        lastSentAt: null,
+        sentCount: 0,
+        openCount: 0,
+        clickCount: 0,
+        replyCount: 0
       })
       .where(eq(emailCampaigns.id, id))
       .returning();
