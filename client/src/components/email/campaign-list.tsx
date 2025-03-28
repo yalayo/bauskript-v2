@@ -37,13 +37,6 @@ export default function CampaignList() {
   const { data: campaigns, isLoading } = useQuery<EmailCampaign[]>({
     queryKey: ["/api/email-campaigns"],
     retry: false,
-    onSuccess: (data) => {
-      console.log("Campaigns fetched:", data);
-      // Log each campaign status to inspect what might be wrong
-      data?.forEach(campaign => {
-        console.log(`Campaign ID ${campaign.id}: ${campaign.name} - Status: ${campaign.status}`);
-      });
-    }
   });
   
   // Define the response type for Gmail status

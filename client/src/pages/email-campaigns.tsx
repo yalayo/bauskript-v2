@@ -147,14 +147,16 @@ export default function EmailCampaigns() {
                     New Campaign
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[600px]">
+                <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Create New Campaign</DialogTitle>
                     <DialogDescription>
                       Fill out the details below to create a new email campaign.
                     </DialogDescription>
                   </DialogHeader>
-                  <CampaignForm onSuccess={() => setOpenCampaignDialog(false)} />
+                  <div className="py-4">
+                    <CampaignForm onSuccess={() => setOpenCampaignDialog(false)} />
+                  </div>
                 </DialogContent>
               </Dialog>
             </CardHeader>
@@ -182,14 +184,16 @@ export default function EmailCampaigns() {
                         Add Contact
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-[500px]">
+                    <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
                       <DialogHeader>
                         <DialogTitle>Add New Contact</DialogTitle>
                         <DialogDescription>
                           Fill out the contact information below.
                         </DialogDescription>
                       </DialogHeader>
-                      <ContactForm onSuccess={() => setOpenContactDialog(false)} />
+                      <div className="py-4">
+                        <ContactForm onSuccess={() => setOpenContactDialog(false)} />
+                      </div>
                     </DialogContent>
                   </Dialog>
                 </CardHeader>
