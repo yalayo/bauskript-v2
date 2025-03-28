@@ -109,6 +109,7 @@ export interface IStorage {
     totalProcessed: number;
     totalScheduled: number;
     remainingContacts: number;
+    isProcessingActive: boolean;
   }>;
   scheduleEmailCampaign(id: number, date: Date): Promise<EmailCampaign>;
   pauseEmailCampaign(id: number): Promise<EmailCampaign>;
@@ -1086,11 +1087,15 @@ export class MemStorage implements IStorage {
     totalProcessed: number;
     totalScheduled: number;
     remainingContacts: number;
+    isProcessingActive: boolean;
   }> {
     const campaign = await this.getEmailCampaign(id);
     if (!campaign) {
       throw new Error("Email campaign not found");
     }
+    
+    // Check if campaign is actively processing (status is running)
+    const isProcessingActive = campaign.status === 'running';
     
     // Get all emails for this campaign
     const campaignEmails = Array.from(this.emails.values())
@@ -1138,7 +1143,8 @@ export class MemStorage implements IStorage {
       nextContact,
       totalProcessed: processedContactIds.size,
       totalScheduled: campaignContacts.length,
-      remainingContacts: remainingContacts.length + (currentContact ? 1 : 0)
+      remainingContacts: remainingContacts.length + (currentContact ? 1 : 0),
+      isProcessingActive
     };
   }
   
@@ -2174,12 +2180,16 @@ export class DatabaseStorage implements IStorage {
     totalProcessed: number;
     totalScheduled: number;
     remainingContacts: number;
+    isProcessingActive: boolean;
   }> {
     // Check if campaign exists
     const campaign = await this.getEmailCampaign(id);
     if (!campaign) {
       throw new Error("Email campaign not found");
     }
+    
+    // Check if campaign is actively processing (status is running)
+    const isProcessingActive = campaign.status === 'running';
     
     // Get all emails sent for this campaign to identify processed contacts
     const campaignEmails = await db
@@ -2221,7 +2231,8 @@ export class DatabaseStorage implements IStorage {
       nextContact,
       totalProcessed: processedContactIds.size,
       totalScheduled: scheduledContacts.length,
-      remainingContacts: unprocessedContacts.length
+      remainingContacts: unprocessedContacts.length,
+      isProcessingActive
     };
   }
   

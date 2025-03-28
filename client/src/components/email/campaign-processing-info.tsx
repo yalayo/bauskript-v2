@@ -30,6 +30,7 @@ interface ProcessingInfo {
   totalProcessed: number;
   totalScheduled: number;
   remainingContacts: number;
+  isProcessingActive: boolean;
 }
 
 export default function CampaignProcessingInfo({ campaignId }: CampaignProcessingInfoProps) {
@@ -85,141 +86,180 @@ export default function CampaignProcessingInfo({ campaignId }: CampaignProcessin
   const total = data.totalProcessed + data.remainingContacts;
   const percentComplete = total > 0 ? Math.round((data.totalProcessed / total) * 100) : 0;
 
+  // If no active processing and no contacts in queue, show a simple message
+  if (!data.isProcessingActive && !data.currentContact && !data.nextContact && data.remainingContacts === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Campaign Status</CardTitle>
+          <CardDescription>
+            {data.totalProcessed > 0 
+              ? 'All emails have been processed'
+              : 'Campaign is not currently processing emails'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-4 text-muted-foreground">
+            <div className="mb-4">
+              <p className="text-lg font-bold">{data.totalProcessed}</p>
+              <p className="text-xs text-muted-foreground">Total emails processed</p>
+            </div>
+            {data.totalProcessed === 0 && (
+              <p>Start the campaign to begin sending emails every 220 seconds.</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Campaign Progress</CardTitle>
-          <CardDescription>
-            {percentComplete === 100 
-              ? 'All emails have been processed'
-              : 'Emails being processed in sequence'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div>
-            <div className="flex justify-between mb-2">
-              <span className="text-sm text-muted-foreground">Progress</span>
-              <span className="text-sm font-medium">{percentComplete}%</span>
-            </div>
-            <Progress value={percentComplete} className="h-2" />
-            
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
-              <div>
-                <p className="text-xs text-muted-foreground">Total</p>
-                <p className="text-lg font-bold">{total}</p>
+      {/* Only show campaign progress when emails are actively being sent */}
+      {data.isProcessingActive && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Campaign Progress</CardTitle>
+            <CardDescription>
+              {percentComplete === 100 
+                ? 'All emails have been processed'
+                : 'Emails being processed in sequence'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div>
+              <div className="flex justify-between mb-2">
+                <span className="text-sm text-muted-foreground">Progress</span>
+                <span className="text-sm font-medium">{percentComplete}%</span>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Processed</p>
-                <p className="text-lg font-bold">{data.totalProcessed}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Remaining</p>
-                <p className="text-lg font-bold">{data.remainingContacts}</p>
-              </div>
-            </div>
-            
-            {data.remainingContacts > 0 && (
-              <div className="mt-4 p-2 bg-primary/5 rounded text-sm text-muted-foreground border border-primary/10">
-                <p className="flex items-center">
-                  <Mail className="h-4 w-4 mr-2 text-primary" /> 
-                  Emails are automatically sent every 220 seconds (3.67 minutes)
-                </p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-          
-      <Card>
-        <CardHeader>
-          <CardTitle>Processing Queue</CardTitle>
-          <CardDescription>
-            Current and next contacts in the processing queue
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div>
-            <h3 className="text-sm font-medium mb-2">Currently Processing</h3>
-            {data.currentContact ? (
-              <div className="bg-muted rounded-md p-4">
-                <div className="flex items-start gap-3">
-                  <div className="bg-primary/10 rounded-full p-2">
-                    <Mail className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="space-y-1 flex-1">
-                    <p className="font-medium">{data.currentContact.email}</p>
-                    <div className="text-sm text-muted-foreground">
-                      {data.currentContact.name && (
-                        <div className="flex items-center">
-                          <User className="mr-1 h-3 w-3" /> {data.currentContact.name}
-                        </div>
-                      )}
-                      {data.currentContact.company && (
-                        <div className="flex items-center">
-                          <Building2 className="mr-1 h-3 w-3" /> {data.currentContact.company}
-                        </div>
-                      )}
-                      {data.currentContact.phone && (
-                        <div className="flex items-center">
-                          <Phone className="mr-1 h-3 w-3" /> {data.currentContact.phone}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <Badge>Current</Badge>
+              <Progress value={percentComplete} className="h-2" />
+              
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">Total</p>
+                  <p className="text-lg font-bold">{total}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Processed</p>
+                  <p className="text-lg font-bold">{data.totalProcessed}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Remaining</p>
+                  <p className="text-lg font-bold">{data.remainingContacts}</p>
                 </div>
               </div>
-            ) : (
-              <div className="text-center py-4 text-muted-foreground">
-                No contact being processed currently
-              </div>
-            )}
-          </div>
-          
-          <Separator />
-          
-          <div>
-            <h3 className="text-sm font-medium mb-2">Next in Queue</h3>
-            {data.nextContact ? (
-              <div className="bg-muted rounded-md p-4">
-                <div className="flex items-start gap-3">
-                  <div className="bg-primary/10 rounded-full p-2">
-                    <Mail className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <div className="space-y-1 flex-1">
-                    <p className="font-medium">{data.nextContact.email}</p>
-                    <div className="text-sm text-muted-foreground">
-                      {data.nextContact.name && (
-                        <div className="flex items-center">
-                          <User className="mr-1 h-3 w-3" /> {data.nextContact.name}
-                        </div>
-                      )}
-                      {data.nextContact.company && (
-                        <div className="flex items-center">
-                          <Building2 className="mr-1 h-3 w-3" /> {data.nextContact.company}
-                        </div>
-                      )}
-                      {data.nextContact.phone && (
-                        <div className="flex items-center">
-                          <Phone className="mr-1 h-3 w-3" /> {data.nextContact.phone}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <Badge variant="outline">Next</Badge>
+              
+              {data.remainingContacts > 0 && (
+                <div className="mt-4 p-2 bg-primary/5 rounded text-sm text-muted-foreground border border-primary/10">
+                  <p className="flex items-center">
+                    <Mail className="h-4 w-4 mr-2 text-primary" /> 
+                    Emails are automatically sent every 220 seconds (3.67 minutes)
+                  </p>
                 </div>
-              </div>
-            ) : (
-              <div className="text-center py-4 text-muted-foreground">
-                {percentComplete === 100 
-                  ? 'All contacts have been processed' 
-                  : 'No contact in the queue'}
-              </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+          
+      {/* Only show processing queue if there are contacts to process or being processed */}
+      {(data.currentContact || data.nextContact || data.remainingContacts > 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Processing Queue</CardTitle>
+            <CardDescription>
+              Current and next contacts in the processing queue
+              {!data.isProcessingActive && data.remainingContacts > 0 && 
+                " (Paused - start campaign to begin processing)"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div>
+              <h3 className="text-sm font-medium mb-2">Currently Processing</h3>
+              {data.currentContact ? (
+                <div className="bg-muted rounded-md p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="bg-primary/10 rounded-full p-2">
+                      <Mail className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="space-y-1 flex-1">
+                      <p className="font-medium">{data.currentContact.email}</p>
+                      <div className="text-sm text-muted-foreground">
+                        {data.currentContact.name && (
+                          <div className="flex items-center">
+                            <User className="mr-1 h-3 w-3" /> {data.currentContact.name}
+                          </div>
+                        )}
+                        {data.currentContact.company && (
+                          <div className="flex items-center">
+                            <Building2 className="mr-1 h-3 w-3" /> {data.currentContact.company}
+                          </div>
+                        )}
+                        {data.currentContact.phone && (
+                          <div className="flex items-center">
+                            <Phone className="mr-1 h-3 w-3" /> {data.currentContact.phone}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <Badge>Current</Badge>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-4 text-muted-foreground">
+                  No contact being processed currently
+                </div>
+              )}
+            </div>
+            
+            {(data.nextContact || data.remainingContacts > 1) && (
+              <>
+                <Separator />
+                
+                <div>
+                  <h3 className="text-sm font-medium mb-2">Next in Queue</h3>
+                  {data.nextContact ? (
+                    <div className="bg-muted rounded-md p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="bg-primary/10 rounded-full p-2">
+                          <Mail className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                        <div className="space-y-1 flex-1">
+                          <p className="font-medium">{data.nextContact.email}</p>
+                          <div className="text-sm text-muted-foreground">
+                            {data.nextContact.name && (
+                              <div className="flex items-center">
+                                <User className="mr-1 h-3 w-3" /> {data.nextContact.name}
+                              </div>
+                            )}
+                            {data.nextContact.company && (
+                              <div className="flex items-center">
+                                <Building2 className="mr-1 h-3 w-3" /> {data.nextContact.company}
+                              </div>
+                            )}
+                            {data.nextContact.phone && (
+                              <div className="flex items-center">
+                                <Phone className="mr-1 h-3 w-3" /> {data.nextContact.phone}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <Badge variant="outline">Next</Badge>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 text-muted-foreground">
+                      {percentComplete === 100 
+                        ? 'All contacts have been processed' 
+                        : 'No contact in the queue'}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
