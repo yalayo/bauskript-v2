@@ -889,6 +889,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  app.get("/api/email-campaigns/:id/contacts", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const campaignId = parseInt(req.params.id);
+      if (isNaN(campaignId)) {
+        return res.status(400).json({ error: "Invalid campaign ID" });
+      }
+      
+      const campaign = await storage.getEmailCampaign(campaignId);
+      if (!campaign) {
+        return res.status(404).json({ error: "Campaign not found" });
+      }
+      
+      // Get all emails for this campaign
+      const campaignEmails = await storage.getEmailsByCampaign(campaignId);
+      
+      // Get contact IDs from those emails
+      const contactIds = [...new Set(campaignEmails.map(email => email.contactId))];
+      
+      if (contactIds.length === 0) {
+        return res.json({ contacts: [], emails: [] });
+      }
+      
+      // Get contact details for each contact ID
+      const contacts = [];
+      for (const contactId of contactIds) {
+        const contact = await storage.getContact(contactId);
+        if (contact) {
+          contacts.push(contact);
+        }
+      }
+      
+      res.json({
+        contacts,
+        emails: campaignEmails
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+  
   app.post("/api/process-email", async (req, res, next) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 

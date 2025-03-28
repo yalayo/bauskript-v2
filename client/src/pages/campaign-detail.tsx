@@ -18,6 +18,7 @@ import { Loader2, ArrowLeft, BarChart3, Play, Pause, Calendar, CheckCircle2, Use
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import CampaignProcessingInfo from "@/components/email/campaign-processing-info";
 import ContactsCampaignAssign from "@/components/email/contacts-campaign-assign";
+import CampaignContactsList from "@/components/email/campaign-contacts-list";
 
 export default function CampaignDetail() {
   const { id } = useParams();
@@ -329,6 +330,7 @@ export default function CampaignDetail() {
               campaignId={campaignId} 
               onSuccess={() => {
                 queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns', campaignId, 'processing-info'] });
+                queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns', campaignId, 'contacts'] });
                 toast({
                   title: "Contacts assigned",
                   description: "Contacts have been successfully assigned to this campaign"
@@ -336,28 +338,7 @@ export default function CampaignDetail() {
               }} 
             />
             
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>Campaign Contacts</CardTitle>
-                  <CardDescription>
-                    Recipients of this campaign
-                  </CardDescription>
-                </div>
-                <Button variant="outline" size="sm" className="gap-1">
-                  <UserPlus className="h-4 w-4" />
-                  <span>Add Contacts</span>
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <div className="flex justify-center items-center p-8">
-                  <div className="text-center">
-                    <UserRound className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">Contact details for this campaign will appear here</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <CampaignContactsList campaignId={campaignId} />
           </div>
         </TabsContent>
         

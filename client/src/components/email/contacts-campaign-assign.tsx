@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 
 interface ContactsCampaignAssignProps {
   campaignId: number;
@@ -29,11 +29,16 @@ interface ContactsCampaignAssignProps {
 
 export default function ContactsCampaignAssign({ campaignId, onSuccess }: ContactsCampaignAssignProps) {
   const [selectedContacts, setSelectedContacts] = useState<number[]>([]);
+  const [availableContacts, setAvailableContacts] = useState<any[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Fetch contacts
-  const { data, isLoading } = useQuery({
+  // Fetch all contacts
+  const { 
+    data: contactsData, 
+    isLoading: contactsLoading,
+    refetch: refetchContacts
+  } = useQuery({
     queryKey: ['/api/contacts'],
     queryFn: async () => {
       const res = await fetch('/api/contacts');
@@ -43,6 +48,46 @@ export default function ContactsCampaignAssign({ campaignId, onSuccess }: Contac
       return res.json();
     },
   });
+
+  // Fetch campaign contacts to filter out
+  const {
+    data: campaignContactsData,
+    isLoading: campaignContactsLoading,
+    refetch: refetchCampaignContacts
+  } = useQuery({
+    queryKey: ['/api/email-campaigns', campaignId, 'contacts'],
+    queryFn: async () => {
+      try {
+        const res = await fetch(`/api/email-campaigns/${campaignId}/contacts`);
+        if (!res.ok) {
+          // If endpoint doesn't exist yet, return empty array instead of throwing
+          if (res.status === 404) {
+            return { contacts: [], emails: [] };
+          }
+          throw new Error('Failed to fetch campaign contacts');
+        }
+        return res.json();
+      } catch (error) {
+        console.error('Error fetching campaign contacts:', error);
+        return { contacts: [], emails: [] };
+      }
+    },
+  });
+  
+  // Filter out contacts that are already assigned to this campaign
+  useEffect(() => {
+    if (contactsData?.contacts && campaignContactsData?.contacts) {
+      const campaignContactIds = new Set(
+        campaignContactsData.contacts.map((contact: any) => contact.id)
+      );
+      
+      const filtered = contactsData.contacts.filter(
+        (contact: any) => !campaignContactIds.has(contact.id)
+      );
+      
+      setAvailableContacts(filtered);
+    }
+  }, [contactsData, campaignContactsData]);
   
   // Mutation to assign contacts to campaign
   const assignMutation = useMutation({
@@ -55,10 +100,15 @@ export default function ContactsCampaignAssign({ campaignId, onSuccess }: Contac
         description: `${selectedContacts.length} contacts have been assigned to the campaign.`,
       });
       setSelectedContacts([]);
+      
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns', campaignId] });
       queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns', campaignId, 'stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns', campaignId, 'processing-info'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns', campaignId, 'contacts'] });
+      
+      // Refresh data
+      refetchCampaignContacts();
       
       if (onSuccess) {
         onSuccess();
@@ -84,11 +134,11 @@ export default function ContactsCampaignAssign({ campaignId, onSuccess }: Contac
   
   // Select all contacts
   const selectAll = () => {
-    if (data?.contacts) {
-      if (selectedContacts.length === data.contacts.length) {
+    if (availableContacts.length > 0) {
+      if (selectedContacts.length === availableContacts.length) {
         setSelectedContacts([]);
       } else {
-        setSelectedContacts(data.contacts.map(c => c.id));
+        setSelectedContacts(availableContacts.map(c => c.id));
       }
     }
   };
@@ -106,8 +156,14 @@ export default function ContactsCampaignAssign({ campaignId, onSuccess }: Contac
     
     assignMutation.mutate(selectedContacts);
   };
+
+  // Handle refresh
+  const handleRefresh = () => {
+    refetchContacts();
+    refetchCampaignContacts();
+  };
   
-  if (isLoading) {
+  if (contactsLoading || campaignContactsLoading) {
     return (
       <Card>
         <CardHeader>
@@ -123,19 +179,24 @@ export default function ContactsCampaignAssign({ campaignId, onSuccess }: Contac
   
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Assign Contacts</CardTitle>
-        <CardDescription>Select contacts to add to this campaign</CardDescription>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle>Assign Contacts</CardTitle>
+          <CardDescription>Select contacts to add to this campaign</CardDescription>
+        </div>
+        <Button variant="outline" size="icon" onClick={handleRefresh} title="Refresh contacts list">
+          <RefreshCw className="h-4 w-4" />
+        </Button>
       </CardHeader>
       <CardContent>
-        {data?.contacts?.length > 0 ? (
+        {availableContacts.length > 0 ? (
           <div className="border rounded-md">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-12">
                     <Checkbox 
-                      checked={data.contacts.length > 0 && selectedContacts.length === data.contacts.length}
+                      checked={availableContacts.length > 0 && selectedContacts.length === availableContacts.length}
                       onCheckedChange={selectAll}
                     />
                   </TableHead>
@@ -145,7 +206,7 @@ export default function ContactsCampaignAssign({ campaignId, onSuccess }: Contac
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.contacts.map((contact) => (
+                {availableContacts.map((contact) => (
                   <TableRow key={contact.id}>
                     <TableCell>
                       <Checkbox 
@@ -172,7 +233,9 @@ export default function ContactsCampaignAssign({ campaignId, onSuccess }: Contac
           </div>
         ) : (
           <div className="text-center py-8 text-muted-foreground">
-            No contacts available to assign. Create contacts first.
+            {contactsData?.contacts?.length > 0 
+              ? "All contacts have already been assigned to this campaign."
+              : "No contacts available to assign. Create contacts first."}
           </div>
         )}
       </CardContent>
