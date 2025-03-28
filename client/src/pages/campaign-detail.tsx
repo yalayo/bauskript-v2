@@ -195,7 +195,21 @@ export default function CampaignDetail() {
   const replayMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest('POST', `/api/email-campaigns/${campaignId}/replay`);
-      return response.json();
+      
+      // Handle potential empty or non-JSON responses
+      try {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          return await response.json();
+        } else {
+          // If not JSON, just return success status
+          return { success: true };
+        }
+      } catch (e) {
+        console.log('Response parsing error:', e);
+        // Return a default response object if JSON parsing fails
+        return { success: true };
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns', campaignId] });

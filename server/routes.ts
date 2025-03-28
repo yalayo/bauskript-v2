@@ -1200,7 +1200,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Start the email processing for this campaign
       await startCampaignProcessing(id);
       
-      res.json(updatedCampaign);
+      // Make sure we're explicitly setting content type and sending a valid JSON response
+      res.setHeader('Content-Type', 'application/json');
+      res.json(updatedCampaign || { success: true });
     } catch (error) {
       next(error);
     }
