@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Contact } from "@shared/schema";
@@ -45,13 +45,27 @@ export default function ContactsList() {
   const { toast } = useToast();
   const [selectedContact, setSelectedContact] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
-
+  
+  // Add debounce effect for search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300); // 300ms debounce
+    
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+  
   const { data, isLoading } = useQuery<ContactsResponse>({
-    queryKey: ["/api/contacts", page, limit],
+    queryKey: ["/api/contacts", page, limit, debouncedSearchTerm],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/contacts?page=${page}&limit=${limit}`);
+      let url = `/api/contacts?page=${page}&limit=${limit}`;
+      if (debouncedSearchTerm) {
+        url += `&search=${encodeURIComponent(debouncedSearchTerm)}`;
+      }
+      const res = await apiRequest("GET", url);
       return res.json();
     },
     retry: false,
@@ -84,16 +98,7 @@ export default function ContactsList() {
     setSelectedContact(null);
   };
 
-  // Filter contacts based on search term
-  const filteredContacts = contacts.filter((contact) => {
-    const searchString = searchTerm.toLowerCase();
-    return (
-      (contact.firstName?.toLowerCase() || "").includes(searchString) ||
-      (contact.lastName?.toLowerCase() || "").includes(searchString) ||
-      (contact.email.toLowerCase()).includes(searchString) ||
-      (contact.company?.toLowerCase() || "").includes(searchString)
-    );
-  });
+  // The contacts are already filtered by the server based on the search parameter
 
   const getStatusBadge = (status: string | null) => {
     switch (status) {
@@ -126,12 +131,12 @@ export default function ContactsList() {
         </div>
         <div>
           <span className="text-muted-foreground">
-            {filteredContacts.length} contacts
+            {contacts.length} contacts
           </span>
         </div>
       </div>
 
-      {filteredContacts.length === 0 ? (
+      {contacts.length === 0 ? (
         <div className="text-center py-8">
           <p>No contacts found. {searchTerm ? "Try a different search term." : ""}</p>
         </div>
@@ -148,7 +153,7 @@ export default function ContactsList() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredContacts.map((contact) => (
+            {contacts.map((contact) => (
               <TableRow key={contact.id}>
                 <TableCell className="font-medium">
                   {`${contact.firstName || ""} ${contact.lastName || ""}`.trim() || "N/A"}
@@ -214,8 +219,8 @@ export default function ContactsList() {
         </Table>
       )}
       
-      {/* Only show pagination if we're not searching and there's more than one page */}
-      {!searchTerm && data?.total && data.total > limit && (
+      {/* Show pagination when there's more than one page */}
+      {data?.total && data.total > limit && (
         <Pagination className="mt-4">
           <PaginationContent>
             <PaginationItem>
@@ -306,11 +311,7 @@ export default function ContactsList() {
       {/* Display total contacts info */}
       <div className="text-center text-sm text-muted-foreground mt-2">
         {data?.total ? (
-          searchTerm ? (
-            `Showing ${filteredContacts.length} filtered contacts out of ${data.total} total contacts`
-          ) : (
-            `Showing ${contacts.length} contacts out of ${data.total} total (Page ${page} of ${Math.max(1, Math.ceil(data.total / limit))})`
-          )
+          `Showing ${contacts.length} ${searchTerm ? "filtered " : ""}contacts out of ${data.total} total (Page ${page} of ${Math.max(1, Math.ceil(data.total / limit))})`
         ) : (
           "No contacts available"
         )}

@@ -1380,8 +1380,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const page = req.query.page ? parseInt(req.query.page as string) : 1;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+      const search = req.query.search ? String(req.query.search) : undefined;
       
-      const result = await storage.getContacts(page, limit);
+      const result = await storage.getContacts(page, limit, search);
       res.json(result);
     } catch (error) {
       next(error);

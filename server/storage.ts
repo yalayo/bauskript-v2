@@ -18,7 +18,7 @@ import session from "express-session";
 import createMemoryStore from "memorystore";
 import connectPg from "connect-pg-simple";
 import { db } from "./db";
-import { eq, and, isNull, inArray, sql, asc, desc, count } from "drizzle-orm";
+import { eq, and, isNull, inArray, sql, asc, desc, count, or, like } from "drizzle-orm";
 import { Pool } from '@neondatabase/serverless';
 
 const MemoryStore = createMemoryStore(session);
@@ -118,7 +118,7 @@ export interface IStorage {
   assignContactsToCampaign(campaignId: number, contactIds: number[]): Promise<number>;
 
   // Contact methods
-  getContacts(page?: number, limit?: number): Promise<{ contacts: Contact[], total: number }>;
+  getContacts(page?: number, limit?: number, search?: string): Promise<{ contacts: Contact[], total: number }>;
   getContact(id: number): Promise<Contact | undefined>;
   getContactByEmail(email: string): Promise<Contact | undefined>;
   createContact(contact: InsertContact): Promise<Contact>;
@@ -1149,10 +1149,25 @@ export class MemStorage implements IStorage {
   }
   
   // Contact methods
-  async getContacts(page?: number, limit?: number): Promise<{ contacts: Contact[], total: number }> {
-    const allContacts = Array.from(this.contacts.values());
+  async getContacts(page?: number, limit?: number, search?: string): Promise<{ contacts: Contact[], total: number }> {
+    let allContacts = Array.from(this.contacts.values());
+    
+    // Apply search filtering if provided
+    if (search && search.trim() !== '') {
+      const searchTerm = search.toLowerCase();
+      allContacts = allContacts.filter(contact => {
+        return (
+          (contact.firstName?.toLowerCase() || '').includes(searchTerm) ||
+          (contact.lastName?.toLowerCase() || '').includes(searchTerm) ||
+          contact.email.toLowerCase().includes(searchTerm) ||
+          (contact.company?.toLowerCase() || '').includes(searchTerm)
+        );
+      });
+    }
+    
     const total = allContacts.length;
     
+    // Apply pagination if requested
     if (page !== undefined && limit !== undefined) {
       const startIndex = (page - 1) * limit;
       const endIndex = startIndex + limit;
@@ -2237,22 +2252,40 @@ export class DatabaseStorage implements IStorage {
   }
   
   // Contact methods
-  async getContacts(page?: number, limit?: number): Promise<{ contacts: Contact[], total: number }> {
-    const total = await db.select({ count: count() }).from(contacts);
+  async getContacts(page?: number, limit?: number, search?: string): Promise<{ contacts: Contact[], total: number }> {
+    let query = db.select().from(contacts);
+    let countQuery = db.select({ count: count() }).from(contacts);
     
-    if (page !== undefined && limit !== undefined) {
-      const offset = (page - 1) * limit;
-      const paginatedContacts = await db
-        .select()
-        .from(contacts)
-        .limit(limit)
-        .offset(offset);
+    // Add search filtering if provided
+    if (search && search.trim() !== '') {
+      const searchTerm = `%${search.toLowerCase()}%`;
       
-      return { contacts: paginatedContacts, total: total[0].count };
+      // Create the where conditions for searching
+      const whereConditions = or(
+        like(sql`LOWER(${contacts.firstName})`, searchTerm),
+        like(sql`LOWER(${contacts.lastName})`, searchTerm),
+        like(sql`LOWER(${contacts.email})`, searchTerm),
+        like(sql`LOWER(${contacts.company})`, searchTerm)
+      );
+      
+      // Apply to both the main query and count query
+      query = query.where(whereConditions);
+      countQuery = countQuery.where(whereConditions);
     }
     
-    const allContacts = await db.select().from(contacts);
-    return { contacts: allContacts, total: total[0].count };
+    // Get the total count with filters applied
+    const totalResult = await countQuery;
+    const total = totalResult[0].count;
+    
+    // Apply pagination if requested
+    if (page !== undefined && limit !== undefined) {
+      const offset = (page - 1) * limit;
+      query = query.limit(limit).offset(offset);
+    }
+    
+    // Execute the final query
+    const result = await query;
+    return { contacts: result, total };
   }
   
   async getContact(id: number): Promise<Contact | undefined> {
