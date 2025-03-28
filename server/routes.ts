@@ -1018,10 +1018,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
             company = typedRow[2];
           }
           
+          // Try to extract phone number
+          let phone = null;
+          if ("D" in typedRow) {
+            phone = typedRow["D"];
+          } else if ("Phone" in typedRow || "PHONE" in typedRow || "Telephone" in typedRow || "TEL" in typedRow) {
+            phone = typedRow["Phone"] || typedRow["PHONE"] || typedRow["Telephone"] || typedRow["TEL"];
+          } else if (3 in typedRow) {
+            phone = typedRow[3];
+          }
+          
           contacts.push({
             email: email.trim(),
             category: category ? String(category).trim() : undefined,
-            company: company ? String(company).trim() : undefined
+            company: company ? String(company).trim() : undefined,
+            phone: phone ? String(phone).trim() : undefined
           });
         } catch (err) {
           console.warn("Error processing row:", err);

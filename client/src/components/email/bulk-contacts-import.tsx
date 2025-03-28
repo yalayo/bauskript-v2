@@ -14,6 +14,12 @@ interface BulkImportStats {
   duplicates: number;
   invalid: number;
   errors: string[];
+  attempted?: number;
+  rejectionReasons?: {
+    duplicates: number;
+    invalidFormat: number;
+    other: number;
+  };
 }
 
 interface ImportedContact {
@@ -21,6 +27,7 @@ interface ImportedContact {
   email: string;
   category?: string | null;
   company?: string | null;
+  phone?: string | null;
   createdAt: string;
 }
 
@@ -42,10 +49,10 @@ export default function BulkContactsImport({ onImportComplete }: BulkContactsImp
   const downloadTemplate = () => {
     // Create a sample CSV content
     const csvContent = [
-      ['Category', 'Email', 'Company'],
-      ['ARQUITECTURA', 'architect@example.com', 'ABC Architecture'],
-      ['INGENIERIA', 'engineer@example.com', 'XYZ Engineering'],
-      ['CONSTRUCCION', 'builder@example.com', '123 Construction']
+      ['Category', 'Email', 'Company', 'Phone'],
+      ['ARQUITECTURA', 'architect@example.com', 'ABC Architecture', '+34600123456'],
+      ['INGENIERIA', 'engineer@example.com', 'XYZ Engineering', '+34600789012'],
+      ['CONSTRUCCION', 'builder@example.com', '123 Construction', '+34600345678']
     ]
       .map(row => row.join(','))
       .join('\n');
@@ -226,7 +233,7 @@ export default function BulkContactsImport({ onImportComplete }: BulkContactsImp
                 or click to browse files
               </p>
               <p className="text-xs">
-                Upload a .xlsx or .xls file with emails in column B, categories in column A, and organizations in column C
+                Upload a .xlsx or .xls file with emails in column B, categories in column A, organizations in column C, and phone numbers in column D
               </p>
               <p className="text-xs mt-1 text-amber-600">
                 Important: Make sure your file has the .xlsx or .xls extension
@@ -248,6 +255,7 @@ export default function BulkContactsImport({ onImportComplete }: BulkContactsImp
                   <li>Email addresses in column B (or a column labeled "Email")</li>
                   <li>Categories in column A (or a column labeled "Category"/"Type")</li>
                   <li>Company/Organization in column C (or a column labeled "Company"/"Organization")</li>
+                  <li>Phone numbers in column D (or a column labeled "Phone"/"Telephone")</li>
                 </ul>
               </div>
             </AlertDescription>
@@ -303,6 +311,7 @@ export default function BulkContactsImport({ onImportComplete }: BulkContactsImp
                           <th className="px-4 py-2 text-left font-medium">Email</th>
                           <th className="px-4 py-2 text-left font-medium">Category</th>
                           <th className="px-4 py-2 text-left font-medium">Company</th>
+                          <th className="px-4 py-2 text-left font-medium">Phone</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
@@ -311,6 +320,7 @@ export default function BulkContactsImport({ onImportComplete }: BulkContactsImp
                             <td className="px-4 py-2">{contact.email}</td>
                             <td className="px-4 py-2">{contact.category || '-'}</td>
                             <td className="px-4 py-2">{contact.company || '-'}</td>
+                            <td className="px-4 py-2">{contact.phone || '-'}</td>
                           </tr>
                         ))}
                       </tbody>

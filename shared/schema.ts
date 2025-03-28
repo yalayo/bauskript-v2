@@ -364,12 +364,14 @@ export type BulkContact = {
   email: string;
   category?: string;
   company?: string;
+  phone?: string;
 };
 
 export const bulkContactSchema = z.object({
   email: z.string().email("Invalid email format"),
   category: z.string().optional(),
   company: z.string().optional(),
+  phone: z.string().optional(),
 });
 
 export type BulkImportStats = {

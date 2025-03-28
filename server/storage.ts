@@ -119,6 +119,12 @@ export interface IStorage {
     duplicates: number;
     invalid: number;
     errors: string[];
+    attempted: number;
+    rejectionReasons: {
+      duplicates: number;
+      invalidFormat: number;
+      other: number;
+    };
   }>;
   getBulkContactsForProcessing(): Promise<Contact[]>;
   markContactsForProcessing(contactIds: number[]): Promise<void>;
@@ -1006,19 +1012,31 @@ export class MemStorage implements IStorage {
     this.contacts.delete(id);
   }
   
-  async bulkImportContacts(contacts: { email: string; category?: string; company?: string }[], userId: number): Promise<{
+  async bulkImportContacts(contacts: { email: string; category?: string; company?: string; phone?: string }[], userId: number): Promise<{
     total: number;
     imported: number;
     duplicates: number;
     invalid: number;
     errors: string[];
+    attempted: number;
+    rejectionReasons: {
+      duplicates: number;
+      invalidFormat: number;
+      other: number;
+    };
   }> {
     const result = {
       total: contacts.length,
+      attempted: contacts.length,
       imported: 0,
       duplicates: 0,
       invalid: 0,
-      errors: [] as string[]
+      errors: [] as string[],
+      rejectionReasons: {
+        duplicates: 0,
+        invalidFormat: 0,
+        other: 0
+      }
     };
 
     for (const contactData of contacts) {
@@ -1026,6 +1044,7 @@ export class MemStorage implements IStorage {
         // Skip invalid emails
         if (!contactData.email || !contactData.email.includes('@')) {
           result.invalid++;
+          result.rejectionReasons.invalidFormat++;
           result.errors.push(`Invalid email format: ${contactData.email}`);
           continue;
         }
@@ -1034,6 +1053,7 @@ export class MemStorage implements IStorage {
         const existingContact = await this.getContactByEmail(contactData.email);
         if (existingContact) {
           result.duplicates++;
+          result.rejectionReasons.duplicates++;
           continue;
         }
 
@@ -1057,6 +1077,7 @@ export class MemStorage implements IStorage {
         result.imported++;
       } catch (error) {
         result.errors.push(`Error importing ${contactData.email}: ${error instanceof Error ? error.message : "Unknown error"}`);
+        result.rejectionReasons.other++;
       }
     }
 
@@ -1912,13 +1933,25 @@ export class DatabaseStorage implements IStorage {
     duplicates: number;
     invalid: number;
     errors: string[];
+    attempted: number;
+    rejectionReasons: {
+      duplicates: number;
+      invalidFormat: number;
+      other: number;
+    };
   }> {
     const result = {
       total: contactsData.length,
+      attempted: contactsData.length,
       imported: 0,
       duplicates: 0,
       invalid: 0,
-      errors: [] as string[]
+      errors: [] as string[],
+      rejectionReasons: {
+        duplicates: 0,
+        invalidFormat: 0,
+        other: 0
+      }
     };
 
     for (const contactData of contactsData) {
@@ -1926,6 +1959,7 @@ export class DatabaseStorage implements IStorage {
         // Skip invalid emails
         if (!contactData.email || !contactData.email.includes('@')) {
           result.invalid++;
+          result.rejectionReasons.invalidFormat++;
           result.errors.push(`Invalid email format: ${contactData.email}`);
           continue;
         }
@@ -1934,6 +1968,7 @@ export class DatabaseStorage implements IStorage {
         const existingContact = await this.getContactByEmail(contactData.email);
         if (existingContact) {
           result.duplicates++;
+          result.rejectionReasons.duplicates++;
           continue;
         }
 
@@ -1957,6 +1992,7 @@ export class DatabaseStorage implements IStorage {
         result.imported++;
       } catch (error) {
         result.errors.push(`Error importing ${contactData.email}: ${error instanceof Error ? error.message : "Unknown error"}`);
+        result.rejectionReasons.other++;
       }
     }
 
