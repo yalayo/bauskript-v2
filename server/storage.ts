@@ -113,6 +113,13 @@ export interface IStorage {
   createContact(contact: InsertContact): Promise<Contact>;
   updateContact(id: number, contact: Partial<InsertContact>): Promise<Contact>;
   deleteContact(id: number): Promise<void>;
+  bulkImportContacts(contacts: { email: string; category?: string; company?: string }[], userId: number): Promise<{
+    total: number;
+    imported: number;
+    duplicates: number;
+    invalid: number;
+    errors: string[];
+  }>;
   getBulkContactsForProcessing(): Promise<Contact[]>;
   markContactsForProcessing(contactIds: number[]): Promise<void>;
   getNextContactForProcessing(): Promise<Contact | undefined>;
@@ -990,6 +997,63 @@ export class MemStorage implements IStorage {
     this.contacts.delete(id);
   }
   
+  async bulkImportContacts(contacts: { email: string; category?: string; company?: string }[], userId: number): Promise<{
+    total: number;
+    imported: number;
+    duplicates: number;
+    invalid: number;
+    errors: string[];
+  }> {
+    const result = {
+      total: contacts.length,
+      imported: 0,
+      duplicates: 0,
+      invalid: 0,
+      errors: [] as string[]
+    };
+
+    for (const contactData of contacts) {
+      try {
+        // Skip invalid emails
+        if (!contactData.email || !contactData.email.includes('@')) {
+          result.invalid++;
+          result.errors.push(`Invalid email format: ${contactData.email}`);
+          continue;
+        }
+
+        // Check if contact already exists
+        const existingContact = await this.getContactByEmail(contactData.email);
+        if (existingContact) {
+          result.duplicates++;
+          continue;
+        }
+
+        // Create new contact
+        await this.createContact({
+          email: contactData.email,
+          firstName: null,
+          lastName: null,
+          company: contactData.company || null,
+          position: null,
+          phone: null,
+          status: "active",
+          source: "bulk-import",
+          notes: null,
+          category: contactData.category || null,
+          fromBulkUpload: true,
+          scheduledForProcessing: false,
+          createdById: userId
+        });
+
+        result.imported++;
+      } catch (error) {
+        result.errors.push(`Error importing ${contactData.email}: ${error instanceof Error ? error.message : "Unknown error"}`);
+      }
+    }
+
+    return result;
+  }
+  
   async getBulkContactsForProcessing(): Promise<Contact[]> {
     return Array.from(this.contacts.values()).filter(
       (contact) => contact.fromBulkUpload && !contact.scheduledForProcessing && contact.status === "active"
@@ -1829,6 +1893,63 @@ export class DatabaseStorage implements IStorage {
   
   async deleteContact(id: number): Promise<void> {
     await db.delete(contacts).where(eq(contacts.id, id));
+  }
+  
+  async bulkImportContacts(contactsData: { email: string; category?: string; company?: string }[], userId: number): Promise<{
+    total: number;
+    imported: number;
+    duplicates: number;
+    invalid: number;
+    errors: string[];
+  }> {
+    const result = {
+      total: contactsData.length,
+      imported: 0,
+      duplicates: 0,
+      invalid: 0,
+      errors: [] as string[]
+    };
+
+    for (const contactData of contactsData) {
+      try {
+        // Skip invalid emails
+        if (!contactData.email || !contactData.email.includes('@')) {
+          result.invalid++;
+          result.errors.push(`Invalid email format: ${contactData.email}`);
+          continue;
+        }
+
+        // Check if contact already exists
+        const existingContact = await this.getContactByEmail(contactData.email);
+        if (existingContact) {
+          result.duplicates++;
+          continue;
+        }
+
+        // Create new contact
+        await this.createContact({
+          email: contactData.email,
+          firstName: null,
+          lastName: null,
+          company: contactData.company || null,
+          position: null,
+          phone: null,
+          status: "active",
+          source: "bulk-import",
+          notes: null,
+          category: contactData.category || null,
+          fromBulkUpload: true,
+          scheduledForProcessing: false,
+          createdById: userId
+        });
+
+        result.imported++;
+      } catch (error) {
+        result.errors.push(`Error importing ${contactData.email}: ${error instanceof Error ? error.message : "Unknown error"}`);
+      }
+    }
+
+    return result;
   }
   
   async getBulkContactsForProcessing(): Promise<Contact[]> {

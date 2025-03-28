@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, PlusCircle, Mail, Send, BarChart3, AlertCircle } from "lucide-react";
+import { Loader2, PlusCircle, Mail, Send, BarChart3, AlertCircle, Upload, FileUp } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +24,8 @@ import CampaignForm from "@/components/email/campaign-form";
 import CampaignList from "@/components/email/campaign-list";
 import ContactForm from "@/components/email/contact-form";
 import ContactsList from "@/components/email/contacts-list";
-import { useQuery } from "@tanstack/react-query";
+import BulkContactsImport from "@/components/email/bulk-contacts-import";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { EmailCampaign } from "@shared/schema";
 import { getQueryFn } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -34,6 +35,7 @@ export default function EmailCampaigns() {
   const [openCampaignDialog, setOpenCampaignDialog] = useState(false);
   const [openContactDialog, setOpenContactDialog] = useState(false);
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
   
   // Define the response type for Gmail status
   type GmailStatusResponse = {
@@ -163,36 +165,49 @@ export default function EmailCampaigns() {
         </TabsContent>
         
         <TabsContent value="contacts" className="space-y-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <div>
-                <CardTitle>Contact List</CardTitle>
-                <CardDescription>
-                  Manage your contacts for email campaigns
-                </CardDescription>
-              </div>
-              <Dialog open={openContactDialog} onOpenChange={setOpenContactDialog}>
-                <DialogTrigger asChild>
-                  <Button className="ml-auto">
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Add Contact
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[500px]">
-                  <DialogHeader>
-                    <DialogTitle>Add New Contact</DialogTitle>
-                    <DialogDescription>
-                      Fill out the contact information below.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <ContactForm onSuccess={() => setOpenContactDialog(false)} />
-                </DialogContent>
-              </Dialog>
-            </CardHeader>
-            <CardContent>
-              <ContactsList />
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <div>
+                    <CardTitle>Contact List</CardTitle>
+                    <CardDescription>
+                      Manage your contacts for email campaigns
+                    </CardDescription>
+                  </div>
+                  <Dialog open={openContactDialog} onOpenChange={setOpenContactDialog}>
+                    <DialogTrigger asChild>
+                      <Button className="ml-auto">
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Add Contact
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[500px]">
+                      <DialogHeader>
+                        <DialogTitle>Add New Contact</DialogTitle>
+                        <DialogDescription>
+                          Fill out the contact information below.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <ContactForm onSuccess={() => setOpenContactDialog(false)} />
+                    </DialogContent>
+                  </Dialog>
+                </CardHeader>
+                <CardContent>
+                  <ContactsList />
+                </CardContent>
+              </Card>
+            </div>
+            
+            <div className="lg:col-span-1">
+              <BulkContactsImport 
+                onImportComplete={(stats) => {
+                  // Invalidate contacts query to refresh the list
+                  queryClient.invalidateQueries({queryKey: ["/api/contacts"]});
+                }}
+              />
+            </div>
+          </div>
         </TabsContent>
         
         <TabsContent value="analytics" className="space-y-4">

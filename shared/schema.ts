@@ -357,3 +357,24 @@ export type Contact = typeof contacts.$inferSelect;
 
 export type InsertEmail = z.infer<typeof insertEmailSchema>;
 export type Email = typeof emails.$inferSelect;
+
+// Bulk contacts import schema
+export type BulkContact = {
+  email: string;
+  category?: string;
+  company?: string;
+};
+
+export const bulkContactSchema = z.object({
+  email: z.string().email("Invalid email format"),
+  category: z.string().optional(),
+  company: z.string().optional(),
+});
+
+export type BulkImportStats = {
+  total: number;
+  imported: number;
+  duplicates: number;
+  invalid: number;
+  errors: string[];
+};

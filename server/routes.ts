@@ -18,7 +18,10 @@ import {
   insertContactSchema,
   insertEmailSchema,
   insertSurveyQuestionSchema,
-  insertSurveyResponseSchema
+  insertSurveyResponseSchema,
+  bulkContactSchema,
+  type BulkContact,
+  type BulkImportStats
 } from "@shared/schema";
 import Stripe from "stripe";
 import { z } from "zod";
@@ -910,11 +913,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       next(error);
     }
   });
-
-  // Configure multer for file uploads
+  
+  // Configure multer for Excel file uploads
   const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+    limits: {
+      fileSize: 20 * 1024 * 1024, // 20MB limit
+    },
     fileFilter: (req, file, cb) => {
       // Accept only Excel files
       const filetypes = /xlsx|xls/;
@@ -924,9 +929,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (mimetype && extname) {
         return cb(null, true);
       }
-      cb(new Error("Only Excel files are allowed"));
-    },
+      cb(new Error("Error: File upload only supports Excel files (.xlsx, .xls)"));
+    }
   });
+
+  // Bulk import contacts from Excel file
+  app.post("/api/contacts/import", upload.single("file"), async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+      
+      // Read Excel file
+      const workbook = read(req.file.buffer);
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      
+      // Convert to JSON
+      const data = utils.sheet_to_json(worksheet);
+      
+      if (!data || data.length === 0) {
+        return res.status(400).json({ message: "Excel file is empty or has invalid format" });
+      }
+      
+      // Process each row and extract contacts
+      const contacts: BulkContact[] = [];
+      
+      for (const row of data) {
+        // The second column (B) contains the email
+        const email = row["B"] || row[1] || row["email"];
+        
+        if (!email || typeof email !== 'string' || !email.includes('@')) {
+          continue; // Skip invalid emails
+        }
+        
+        // The first column (A) contains the type (Arqu, Email, etc.)
+        const category = row["A"] || row[0] || row["type"] || null;
+        
+        // The third column (C) contains the company/role
+        const company = row["C"] || row[2] || row["company"] || null;
+        
+        contacts.push({
+          email: email,
+          category: category ? String(category) : undefined,
+          company: company ? String(company) : undefined
+        });
+      }
+      
+      // Send to storage to process
+      const importResult = await storage.bulkImportContacts(contacts, req.user!.id);
+      
+      // Return result statistics
+      res.status(200).json({
+        message: `Imported ${importResult.imported} contacts successfully`,
+        stats: importResult
+      });
+      
+    } catch (error) {
+      console.error("Error processing Excel file:", error);
+      res.status(500).json({ message: "Error processing Excel file", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  // Reusing the upload configuration defined above for Excel files
 
   // Excel contacts upload route
   app.post("/api/contacts/upload", upload.single("file"), async (req, res, next) => {
