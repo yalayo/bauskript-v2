@@ -1,4 +1,5 @@
 import { pgTable, text, serial, integer, boolean, timestamp, jsonb, real } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -106,11 +107,85 @@ export const emailCampaigns = pgTable("email_campaigns", {
   name: text("name").notNull(),
   subject: text("subject").notNull(),
   content: text("content").notNull(),
-  status: text("status").default("draft"),
+  status: text("status").default("draft"), // draft, scheduled, running, completed, paused
   sentCount: integer("sent_count").default(0),
+  openCount: integer("open_count").default(0),
+  clickCount: integer("click_count").default(0),
+  scheduledDate: timestamp("scheduled_date"),
+  dailyLimit: integer("daily_limit").default(400),
   createdBy: integer("created_by"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
 });
+
+// Contacts Model (for email campaigns)
+export const contacts = pgTable("contacts", {
+  id: serial("id").primaryKey(),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  email: text("email").notNull().unique(),
+  company: text("company"),
+  position: text("position"),
+  phone: text("phone"),
+  status: text("status").default("active"), // active, unsubscribed, bounced
+  source: text("source"), // where the contact came from
+  notes: text("notes"),
+  createdById: integer("created_by_id")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const contactsRelations = relations(contacts, ({ one, many }) => ({
+  createdBy: one(users, {
+    fields: [contacts.createdById],
+    references: [users.id],
+  }),
+  emails: many(emails),
+}));
+
+// Emails Model (for tracking individual emails)
+export const emails = pgTable("emails", {
+  id: serial("id").primaryKey(),
+  contactId: integer("contact_id")
+    .notNull()
+    .references(() => contacts.id),
+  campaignId: integer("campaign_id").references(() => emailCampaigns.id),
+  subject: text("subject").notNull(),
+  content: text("content").notNull(),
+  sentAt: timestamp("sent_at"),
+  openedAt: timestamp("opened_at"),
+  clickedAt: timestamp("clicked_at"),
+  repliedAt: timestamp("replied_at"),
+  status: text("status").default("draft"), // draft, sent, opened, clicked, replied, bounced
+  direction: text("direction").default("outbound"), // outbound or inbound
+  generatedByAI: boolean("generated_by_ai").default(false),
+  reviewedById: integer("reviewed_by_id").references(() => users.id),
+  aiPrompt: text("ai_prompt"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const emailsRelations = relations(emails, ({ one }) => ({
+  contact: one(contacts, {
+    fields: [emails.contactId],
+    references: [contacts.id],
+  }),
+  campaign: one(emailCampaigns, {
+    fields: [emails.campaignId],
+    references: [emailCampaigns.id],
+  }),
+  reviewedBy: one(users, {
+    fields: [emails.reviewedById],
+    references: [users.id],
+  }),
+}));
+
+// Define user relations after all tables are defined
+export const usersRelations = relations(users, ({ many }) => ({
+  contacts: many(contacts),
+  emails: many(emails),
+}));
 
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -196,7 +271,34 @@ export const insertEmailCampaignSchema = createInsertSchema(emailCampaigns).pick
   subject: true,
   content: true,
   status: true,
+  scheduledDate: true,
+  dailyLimit: true,
   createdBy: true,
+});
+
+export const insertContactSchema = createInsertSchema(contacts).pick({
+  firstName: true,
+  lastName: true,
+  email: true,
+  company: true,
+  position: true,
+  phone: true,
+  status: true,
+  source: true,
+  notes: true,
+  createdById: true,
+});
+
+export const insertEmailSchema = createInsertSchema(emails).pick({
+  contactId: true,
+  campaignId: true,
+  subject: true,
+  content: true,
+  status: true,
+  direction: true,
+  generatedByAI: true,
+  reviewedById: true,
+  aiPrompt: true,
 });
 
 // Types
@@ -232,3 +334,9 @@ export type Questionnaire = typeof questionnaires.$inferSelect;
 
 export type InsertEmailCampaign = z.infer<typeof insertEmailCampaignSchema>;
 export type EmailCampaign = typeof emailCampaigns.$inferSelect;
+
+export type InsertContact = z.infer<typeof insertContactSchema>;
+export type Contact = typeof contacts.$inferSelect;
+
+export type InsertEmail = z.infer<typeof insertEmailSchema>;
+export type Email = typeof emails.$inferSelect;

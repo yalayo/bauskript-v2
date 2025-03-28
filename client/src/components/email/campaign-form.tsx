@@ -1,107 +1,79 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { format } from "date-fns";
+import { CalendarIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { InsertEmailCampaign, insertEmailCampaignSchema } from "@shared/schema";
+import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { EmailCampaign } from "@shared/schema";
 
-// Form validation schema
-const campaignSchema = z.object({
-  name: z.string().min(3, "Name must be at least 3 characters"),
-  subject: z.string().min(5, "Subject must be at least 5 characters"),
-  content: z.string().min(20, "Content must be at least 20 characters"),
-  status: z.enum(["draft", "active", "completed"])
+const formSchema = insertEmailCampaignSchema.extend({
+  scheduledDate: z.date().optional(),
 });
 
-type CampaignFormValues = z.infer<typeof campaignSchema>;
+type FormValues = z.infer<typeof formSchema>;
 
-interface CampaignFormProps {
-  onSuccess?: () => void;
-  campaign?: EmailCampaign;
-}
-
-export default function CampaignForm({ onSuccess, campaign }: CampaignFormProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
+export default function CampaignForm({ onSuccess }: { onSuccess?: () => void }) {
   const { toast } = useToast();
-  
-  const form = useForm<CampaignFormValues>({
-    resolver: zodResolver(campaignSchema),
+  const [date, setDate] = useState<Date>();
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
     defaultValues: {
-      name: campaign?.name || "",
-      subject: campaign?.subject || "",
-      content: campaign?.content || "",
-      status: (campaign?.status as "draft" | "active" | "completed") || "draft"
-    }
+      name: "",
+      subject: "",
+      content: "",
+      dailyLimit: 400,
+    },
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: CampaignFormValues) => {
-      const response = await apiRequest(
-        "POST", 
-        "/api/email-campaigns", 
-        data
-      );
-      return response.json();
+    mutationFn: async (values: InsertEmailCampaign) => {
+      const res = await apiRequest("POST", "/api/email-campaigns", values);
+      return await res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/email-campaigns"] });
       toast({
-        title: "Success",
-        description: "Email campaign created successfully",
+        title: "Campaign created",
+        description: "Email campaign has been created successfully",
       });
+      queryClient.invalidateQueries({ queryKey: ["/api/email-campaigns"] });
       if (onSuccess) onSuccess();
+      form.reset();
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
-        description: `Failed to create email campaign: ${error.message}`,
+        title: "Failed to create campaign",
+        description: error.message,
         variant: "destructive",
       });
-    }
+    },
   });
 
-  const updateMutation = useMutation({
-    mutationFn: async (data: CampaignFormValues) => {
-      const response = await apiRequest(
-        "PATCH", 
-        `/api/email-campaigns/${campaign?.id}`, 
-        data
-      );
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/email-campaigns"] });
-      toast({
-        title: "Success",
-        description: "Email campaign updated successfully",
-      });
-      if (onSuccess) onSuccess();
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: `Failed to update email campaign: ${error.message}`,
-        variant: "destructive",
-      });
-    }
-  });
-
-  const onSubmit = (data: CampaignFormValues) => {
-    setIsSubmitting(true);
-    if (campaign) {
-      updateMutation.mutate(data);
-    } else {
-      createMutation.mutate(data);
-    }
-    setIsSubmitting(false);
-  };
+  function onSubmit(values: FormValues) {
+    createMutation.mutate(values);
+  }
 
   return (
     <Form {...form}>
@@ -142,11 +114,14 @@ export default function CampaignForm({ onSuccess, campaign }: CampaignFormProps)
               <FormLabel>Email Content</FormLabel>
               <FormControl>
                 <Textarea 
-                  placeholder="Write your email content here..."
-                  className="min-h-[200px]"
+                  placeholder="Enter email content"
+                  className="h-32"
                   {...field} 
                 />
               </FormControl>
+              <FormDescription>
+                You can use placeholders like {"{firstName}"} that will be replaced with contact details.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -154,45 +129,83 @@ export default function CampaignForm({ onSuccess, campaign }: CampaignFormProps)
 
         <FormField
           control={form.control}
-          name="status"
+          name="scheduledDate"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>Status</FormLabel>
-              <Select
-                onValueChange={field.onChange}
-                defaultValue={field.value}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                </SelectContent>
-              </Select>
+            <FormItem className="flex flex-col">
+              <FormLabel>Schedule Date (Optional)</FormLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full pl-3 text-left font-normal",
+                        !field.value && "text-muted-foreground"
+                      )}
+                    >
+                      {field.value ? (
+                        format(field.value, "PPP")
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={field.value}
+                    onSelect={field.onChange}
+                    disabled={(date) =>
+                      date < new Date() || date > new Date(new Date().setMonth(new Date().getMonth() + 3))
+                    }
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <FormDescription>
+                Leave empty to save as draft.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        <div className="flex justify-end gap-4">
-          <Button type="button" variant="outline" onClick={onSuccess}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <span className="flex items-center">
-                <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-t-transparent border-white"></div>
-                {campaign ? "Updating..." : "Create Campaign"}
-              </span>
-            ) : (
-              campaign ? "Update Campaign" : "Create Campaign"
-            )}
-          </Button>
-        </div>
+        <FormField
+          control={form.control}
+          name="dailyLimit"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Daily Email Limit</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  placeholder="400"
+                  {...field}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    field.onChange(value === "" ? 400 : parseInt(value, 10));
+                  }}
+                />
+              </FormControl>
+              <FormDescription>
+                Maximum number of emails to send per day (default: 400)
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={createMutation.isPending}
+        >
+          {createMutation.isPending ? "Creating..." : "Create Campaign"}
+        </Button>
       </form>
     </Form>
   );

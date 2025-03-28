@@ -11,6 +11,8 @@ import {
   insertBlogPostSchema,
   insertQuestionnaireSchema,
   insertEmailCampaignSchema,
+  insertContactSchema,
+  insertEmailSchema,
   insertSurveyQuestionSchema,
   insertSurveyResponseSchema
 } from "@shared/schema";
@@ -682,6 +684,166 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         next(error);
       }
+    }
+  });
+
+  // Contacts routes
+  app.get("/api/contacts", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const contacts = await storage.getContacts();
+      res.json(contacts);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/contacts/:id", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const id = parseInt(req.params.id);
+      const contact = await storage.getContact(id);
+      if (contact) {
+        res.json(contact);
+      } else {
+        res.status(404).json({ message: "Contact not found" });
+      }
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/contacts", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const validatedData = insertContactSchema.parse({
+        ...req.body,
+        createdById: req.user?.id,
+      });
+      const contact = await storage.createContact(validatedData);
+      res.status(201).json(contact);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid data", errors: error.errors });
+      } else {
+        next(error);
+      }
+    }
+  });
+
+  app.patch("/api/contacts/:id", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const id = parseInt(req.params.id);
+      const validatedData = insertContactSchema.partial().parse(req.body);
+      const contact = await storage.updateContact(id, validatedData);
+      res.json(contact);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid data", errors: error.errors });
+      } else {
+        next(error);
+      }
+    }
+  });
+
+  app.delete("/api/contacts/:id", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteContact(id);
+      res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Emails routes
+  app.get("/api/emails", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const contactId = req.query.contactId ? parseInt(req.query.contactId as string) : undefined;
+      const campaignId = req.query.campaignId ? parseInt(req.query.campaignId as string) : undefined;
+      
+      let emails;
+      if (contactId) {
+        emails = await storage.getEmailsByContact(contactId);
+      } else if (campaignId) {
+        emails = await storage.getEmailsByCampaign(campaignId);
+      } else {
+        emails = await storage.getEmails();
+      }
+      
+      res.json(emails);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/emails/:id", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const id = parseInt(req.params.id);
+      const email = await storage.getEmail(id);
+      if (email) {
+        res.json(email);
+      } else {
+        res.status(404).json({ message: "Email not found" });
+      }
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/emails", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const validatedData = insertEmailSchema.parse(req.body);
+      const email = await storage.createEmail(validatedData);
+      res.status(201).json(email);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid data", errors: error.errors });
+      } else {
+        next(error);
+      }
+    }
+  });
+
+  app.post("/api/emails/generate-with-ai", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const { contactId, promptTemplate } = req.body;
+      if (!contactId || !promptTemplate) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+      
+      const email = await storage.generateEmailWithAI(contactId, promptTemplate);
+      res.status(201).json(email);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/emails/:id/review", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const id = parseInt(req.params.id);
+      const { content } = req.body;
+      const email = await storage.reviewAndApproveEmail(id, req.user!.id, content);
+      res.json(email);
+    } catch (error) {
+      next(error);
     }
   });
 

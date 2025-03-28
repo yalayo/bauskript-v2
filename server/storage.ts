@@ -9,7 +9,9 @@ import {
   questionnaires, type Questionnaire, type InsertQuestionnaire,
   emailCampaigns, type EmailCampaign, type InsertEmailCampaign,
   surveyQuestions, type SurveyQuestion, type InsertSurveyQuestion,
-  surveyResponses, type SurveyResponse, type InsertSurveyResponse
+  surveyResponses, type SurveyResponse, type InsertSurveyResponse,
+  contacts, type Contact, type InsertContact,
+  emails, type Email, type InsertEmail
 } from "@shared/schema";
 import type { SessionData, Store } from "express-session";
 import session from "express-session";
@@ -96,6 +98,32 @@ export interface IStorage {
   getEmailCampaign(id: number): Promise<EmailCampaign | undefined>;
   createEmailCampaign(campaign: InsertEmailCampaign): Promise<EmailCampaign>;
   updateEmailCampaign(id: number, campaign: Partial<InsertEmailCampaign>): Promise<EmailCampaign>;
+  getEmailCampaignStats(id: number): Promise<any>;
+  scheduleEmailCampaign(id: number, date: Date): Promise<EmailCampaign>;
+  pauseEmailCampaign(id: number): Promise<EmailCampaign>;
+  resumeEmailCampaign(id: number): Promise<EmailCampaign>;
+
+  // Contact methods
+  getContacts(): Promise<Contact[]>;
+  getContact(id: number): Promise<Contact | undefined>;
+  getContactByEmail(email: string): Promise<Contact | undefined>;
+  createContact(contact: InsertContact): Promise<Contact>;
+  updateContact(id: number, contact: Partial<InsertContact>): Promise<Contact>;
+  deleteContact(id: number): Promise<void>;
+  
+  // Email methods
+  getEmails(): Promise<Email[]>;
+  getEmailsByContact(contactId: number): Promise<Email[]>;
+  getEmailsByCampaign(campaignId: number): Promise<Email[]>;
+  getEmail(id: number): Promise<Email | undefined>;
+  createEmail(email: InsertEmail): Promise<Email>;
+  updateEmail(id: number, email: Partial<InsertEmail>): Promise<Email>;
+  markEmailAsSent(id: number): Promise<Email>;
+  markEmailAsOpened(id: number): Promise<Email>;
+  markEmailAsClicked(id: number): Promise<Email>;
+  markEmailAsReplied(id: number): Promise<Email>;
+  generateEmailWithAI(contactId: number, promptTemplate: string): Promise<Email>;
+  reviewAndApproveEmail(id: number, reviewerId: number, content?: string): Promise<Email>;
 
   sessionStore: Store;
 }
@@ -112,6 +140,8 @@ export class MemStorage implements IStorage {
   private surveyResponses: Map<number, SurveyResponse>;
   private questionnaires: Map<number, Questionnaire>;
   private emailCampaigns: Map<number, EmailCampaign>;
+  private contacts: Map<number, Contact>;
+  private emails: Map<number, Email>;
 
   private userCurrentId: number;
   private projectCurrentId: number;
@@ -124,6 +154,8 @@ export class MemStorage implements IStorage {
   private surveyResponseCurrentId: number;
   private questionnaireCurrentId: number;
   private emailCampaignCurrentId: number;
+  private contactCurrentId: number;
+  private emailCurrentId: number;
 
   sessionStore: Store;
 
@@ -139,6 +171,8 @@ export class MemStorage implements IStorage {
     this.surveyResponses = new Map();
     this.questionnaires = new Map();
     this.emailCampaigns = new Map();
+    this.contacts = new Map();
+    this.emails = new Map();
 
     this.userCurrentId = 1;
     this.projectCurrentId = 1;
@@ -151,6 +185,8 @@ export class MemStorage implements IStorage {
     this.surveyResponseCurrentId = 1;
     this.questionnaireCurrentId = 1;
     this.emailCampaignCurrentId = 1;
+    this.contactCurrentId = 1;
+    this.emailCurrentId = 1;
 
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000, // 24 hours
@@ -665,9 +701,311 @@ export class MemStorage implements IStorage {
     if (!existingCampaign) {
       throw new Error("Email campaign not found");
     }
-    const updatedCampaign = { ...existingCampaign, ...campaign };
+    const updatedCampaign = { 
+      ...existingCampaign, 
+      ...campaign,
+      updatedAt: new Date()
+    };
     this.emailCampaigns.set(id, updatedCampaign);
     return updatedCampaign;
+  }
+
+  async getEmailCampaignStats(id: number): Promise<any> {
+    const campaign = await this.getEmailCampaign(id);
+    if (!campaign) {
+      throw new Error("Email campaign not found");
+    }
+    
+    const emails = Array.from(this.emails.values()).filter(
+      email => email.campaignId === id
+    );
+    
+    const sent = emails.filter(email => email.status === 'sent').length;
+    const opened = emails.filter(email => email.opened_at !== null).length;
+    const clicked = emails.filter(email => email.clicked_at !== null).length;
+    const replied = emails.filter(email => email.replied_at !== null).length;
+    
+    return {
+      id: campaign.id,
+      name: campaign.name,
+      sent,
+      opened,
+      clicked,
+      replied,
+      openRate: sent > 0 ? (opened / sent) * 100 : 0,
+      clickRate: opened > 0 ? (clicked / opened) * 100 : 0,
+      replyRate: sent > 0 ? (replied / sent) * 100 : 0
+    };
+  }
+  
+  async scheduleEmailCampaign(id: number, date: Date): Promise<EmailCampaign> {
+    const campaign = await this.getEmailCampaign(id);
+    if (!campaign) {
+      throw new Error("Email campaign not found");
+    }
+    
+    const updatedCampaign = { 
+      ...campaign, 
+      scheduledDate: date,
+      status: 'scheduled',
+      updatedAt: new Date()
+    };
+    
+    this.emailCampaigns.set(id, updatedCampaign);
+    return updatedCampaign;
+  }
+  
+  async pauseEmailCampaign(id: number): Promise<EmailCampaign> {
+    const campaign = await this.getEmailCampaign(id);
+    if (!campaign) {
+      throw new Error("Email campaign not found");
+    }
+    
+    const updatedCampaign = { 
+      ...campaign, 
+      status: 'paused',
+      updatedAt: new Date()
+    };
+    
+    this.emailCampaigns.set(id, updatedCampaign);
+    return updatedCampaign;
+  }
+  
+  async resumeEmailCampaign(id: number): Promise<EmailCampaign> {
+    const campaign = await this.getEmailCampaign(id);
+    if (!campaign) {
+      throw new Error("Email campaign not found");
+    }
+    
+    const updatedCampaign = { 
+      ...campaign, 
+      status: campaign.scheduledDate && campaign.scheduledDate > new Date() ? 'scheduled' : 'active',
+      updatedAt: new Date()
+    };
+    
+    this.emailCampaigns.set(id, updatedCampaign);
+    return updatedCampaign;
+  }
+  
+  // Contact methods
+  async getContacts(): Promise<Contact[]> {
+    return Array.from(this.contacts.values());
+  }
+  
+  async getContact(id: number): Promise<Contact | undefined> {
+    return this.contacts.get(id);
+  }
+  
+  async getContactByEmail(email: string): Promise<Contact | undefined> {
+    return Array.from(this.contacts.values()).find(
+      contact => contact.email === email
+    );
+  }
+  
+  async createContact(contact: InsertContact): Promise<Contact> {
+    const id = this.contactCurrentId++;
+    const newContact: Contact = {
+      ...contact,
+      id,
+      created_at: new Date(),
+      updated_at: null,
+      status: contact.status || 'active',
+      source: contact.source || null,
+      notes: contact.notes || null,
+      company: contact.company || null,
+      position: contact.position || null,
+      phone: contact.phone || null
+    };
+    this.contacts.set(id, newContact);
+    return newContact;
+  }
+  
+  async updateContact(id: number, contact: Partial<InsertContact>): Promise<Contact> {
+    const existingContact = await this.getContact(id);
+    if (!existingContact) {
+      throw new Error("Contact not found");
+    }
+    const updatedContact = { 
+      ...existingContact, 
+      ...contact,
+      updated_at: new Date()
+    };
+    this.contacts.set(id, updatedContact);
+    return updatedContact;
+  }
+  
+  async deleteContact(id: number): Promise<void> {
+    this.contacts.delete(id);
+  }
+  
+  // Email methods
+  async getEmails(): Promise<Email[]> {
+    return Array.from(this.emails.values());
+  }
+  
+  async getEmailsByContact(contactId: number): Promise<Email[]> {
+    return Array.from(this.emails.values()).filter(
+      email => email.contactId === contactId
+    );
+  }
+  
+  async getEmailsByCampaign(campaignId: number): Promise<Email[]> {
+    return Array.from(this.emails.values()).filter(
+      email => email.campaignId === campaignId
+    );
+  }
+  
+  async getEmail(id: number): Promise<Email | undefined> {
+    return this.emails.get(id);
+  }
+  
+  async createEmail(email: InsertEmail): Promise<Email> {
+    const id = this.emailCurrentId++;
+    const newEmail: Email = {
+      ...email,
+      id,
+      created_at: new Date(),
+      sent_at: null,
+      opened_at: null,
+      clicked_at: null,
+      replied_at: null,
+      status: email.status || 'draft',
+      direction: email.direction || 'outbound',
+      generated_by_ai: email.generated_by_ai || false,
+      reviewed_by_id: email.reviewed_by_id || null,
+      ai_prompt: email.ai_prompt || null
+    };
+    this.emails.set(id, newEmail);
+    return newEmail;
+  }
+  
+  async updateEmail(id: number, email: Partial<InsertEmail>): Promise<Email> {
+    const existingEmail = await this.getEmail(id);
+    if (!existingEmail) {
+      throw new Error("Email not found");
+    }
+    const updatedEmail = { ...existingEmail, ...email };
+    this.emails.set(id, updatedEmail);
+    return updatedEmail;
+  }
+  
+  async markEmailAsSent(id: number): Promise<Email> {
+    const email = await this.getEmail(id);
+    if (!email) {
+      throw new Error("Email not found");
+    }
+    const updatedEmail = { 
+      ...email, 
+      status: 'sent',
+      sent_at: new Date()
+    };
+    this.emails.set(id, updatedEmail);
+    return updatedEmail;
+  }
+  
+  async markEmailAsOpened(id: number): Promise<Email> {
+    const email = await this.getEmail(id);
+    if (!email) {
+      throw new Error("Email not found");
+    }
+    const updatedEmail = { 
+      ...email, 
+      opened_at: new Date()
+    };
+    this.emails.set(id, updatedEmail);
+    
+    // Update campaign stats if part of a campaign
+    if (email.campaignId) {
+      const campaign = await this.getEmailCampaign(email.campaignId);
+      if (campaign) {
+        const updatedCampaign = {
+          ...campaign,
+          openCount: (campaign.openCount || 0) + 1
+        };
+        this.emailCampaigns.set(campaign.id, updatedCampaign);
+      }
+    }
+    
+    return updatedEmail;
+  }
+  
+  async markEmailAsClicked(id: number): Promise<Email> {
+    const email = await this.getEmail(id);
+    if (!email) {
+      throw new Error("Email not found");
+    }
+    const updatedEmail = { 
+      ...email, 
+      clicked_at: new Date()
+    };
+    this.emails.set(id, updatedEmail);
+    
+    // Update campaign stats if part of a campaign
+    if (email.campaignId) {
+      const campaign = await this.getEmailCampaign(email.campaignId);
+      if (campaign) {
+        const updatedCampaign = {
+          ...campaign,
+          clickCount: (campaign.clickCount || 0) + 1
+        };
+        this.emailCampaigns.set(campaign.id, updatedCampaign);
+      }
+    }
+    
+    return updatedEmail;
+  }
+  
+  async markEmailAsReplied(id: number): Promise<Email> {
+    const email = await this.getEmail(id);
+    if (!email) {
+      throw new Error("Email not found");
+    }
+    const updatedEmail = { 
+      ...email, 
+      replied_at: new Date()
+    };
+    this.emails.set(id, updatedEmail);
+    return updatedEmail;
+  }
+  
+  async generateEmailWithAI(contactId: number, promptTemplate: string): Promise<Email> {
+    const contact = await this.getContact(contactId);
+    if (!contact) {
+      throw new Error("Contact not found");
+    }
+    
+    // This is where we would integrate with the Gemini API to generate content
+    // For now, we'll just create a placeholder email
+    
+    const newEmail: InsertEmail = {
+      contact_id: contactId,
+      campaignId: null,
+      subject: `Hello ${contact.first_name}`,
+      content: `Dear ${contact.first_name},\n\nThis is a placeholder for AI-generated content based on the prompt: ${promptTemplate}\n\nBest regards,\nThe Team`,
+      status: 'draft',
+      direction: 'outbound',
+      generated_by_ai: true,
+      ai_prompt: promptTemplate
+    };
+    
+    return this.createEmail(newEmail);
+  }
+  
+  async reviewAndApproveEmail(id: number, reviewerId: number, content?: string): Promise<Email> {
+    const email = await this.getEmail(id);
+    if (!email) {
+      throw new Error("Email not found");
+    }
+    
+    const updatedEmail = { 
+      ...email, 
+      status: 'approved',
+      reviewed_by_id: reviewerId,
+      content: content || email.content
+    };
+    
+    this.emails.set(id, updatedEmail);
+    return updatedEmail;
   }
 }
 
@@ -1062,6 +1400,357 @@ export class DatabaseStorage implements IStorage {
     }
     
     return updatedCampaign;
+  }
+
+  async getEmailCampaignStats(id: number): Promise<any> {
+    const campaign = await this.getEmailCampaign(id);
+    if (!campaign) {
+      throw new Error("Email campaign not found");
+    }
+    
+    const emailList = await db
+      .select()
+      .from(emails)
+      .where(eq(emails.campaignId, id));
+    
+    const sent = emailList.filter(email => email.status === 'sent').length;
+    const opened = emailList.filter(email => email.opened_at !== null).length;
+    const clicked = emailList.filter(email => email.clicked_at !== null).length;
+    const replied = emailList.filter(email => email.replied_at !== null).length;
+    
+    return {
+      id: campaign.id,
+      name: campaign.name,
+      sent,
+      opened,
+      clicked,
+      replied,
+      openRate: sent > 0 ? (opened / sent) * 100 : 0,
+      clickRate: opened > 0 ? (clicked / opened) * 100 : 0,
+      replyRate: sent > 0 ? (replied / sent) * 100 : 0
+    };
+  }
+  
+  async scheduleEmailCampaign(id: number, date: Date): Promise<EmailCampaign> {
+    const [updatedCampaign] = await db
+      .update(emailCampaigns)
+      .set({ 
+        scheduledDate: date,
+        status: 'scheduled',
+        updatedAt: new Date()
+      })
+      .where(eq(emailCampaigns.id, id))
+      .returning();
+    
+    if (!updatedCampaign) {
+      throw new Error("Email campaign not found");
+    }
+    
+    return updatedCampaign;
+  }
+  
+  async pauseEmailCampaign(id: number): Promise<EmailCampaign> {
+    const [updatedCampaign] = await db
+      .update(emailCampaigns)
+      .set({ 
+        status: 'paused',
+        updatedAt: new Date()
+      })
+      .where(eq(emailCampaigns.id, id))
+      .returning();
+    
+    if (!updatedCampaign) {
+      throw new Error("Email campaign not found");
+    }
+    
+    return updatedCampaign;
+  }
+  
+  async resumeEmailCampaign(id: number): Promise<EmailCampaign> {
+    const campaign = await this.getEmailCampaign(id);
+    if (!campaign) {
+      throw new Error("Email campaign not found");
+    }
+    
+    const status = campaign.scheduledDate && new Date(campaign.scheduledDate) > new Date() 
+      ? 'scheduled' 
+      : 'active';
+    
+    const [updatedCampaign] = await db
+      .update(emailCampaigns)
+      .set({ 
+        status,
+        updatedAt: new Date()
+      })
+      .where(eq(emailCampaigns.id, id))
+      .returning();
+    
+    if (!updatedCampaign) {
+      throw new Error("Email campaign not found");
+    }
+    
+    return updatedCampaign;
+  }
+  
+  // Contact methods
+  async getContacts(): Promise<Contact[]> {
+    return await db.select().from(contacts);
+  }
+  
+  async getContact(id: number): Promise<Contact | undefined> {
+    const [contact] = await db.select().from(contacts).where(eq(contacts.id, id));
+    return contact;
+  }
+  
+  async getContactByEmail(email: string): Promise<Contact | undefined> {
+    const [contact] = await db.select().from(contacts).where(eq(contacts.email, email));
+    return contact;
+  }
+  
+  async createContact(contact: InsertContact): Promise<Contact> {
+    const [newContact] = await db.insert(contacts).values(contact).returning();
+    return newContact;
+  }
+  
+  async updateContact(id: number, contact: Partial<InsertContact>): Promise<Contact> {
+    const [updatedContact] = await db
+      .update(contacts)
+      .set({
+        ...contact,
+        updated_at: new Date()
+      })
+      .where(eq(contacts.id, id))
+      .returning();
+    
+    if (!updatedContact) {
+      throw new Error("Contact not found");
+    }
+    
+    return updatedContact;
+  }
+  
+  async deleteContact(id: number): Promise<void> {
+    await db.delete(contacts).where(eq(contacts.id, id));
+  }
+  
+  // Email methods
+  async getEmails(): Promise<Email[]> {
+    return await db.select().from(emails);
+  }
+  
+  async getEmailsByContact(contactId: number): Promise<Email[]> {
+    return await db
+      .select()
+      .from(emails)
+      .where(eq(emails.contact_id, contactId));
+  }
+  
+  async getEmailsByCampaign(campaignId: number): Promise<Email[]> {
+    return await db
+      .select()
+      .from(emails)
+      .where(eq(emails.campaignId, campaignId));
+  }
+  
+  async getEmail(id: number): Promise<Email | undefined> {
+    const [email] = await db.select().from(emails).where(eq(emails.id, id));
+    return email;
+  }
+  
+  async createEmail(email: InsertEmail): Promise<Email> {
+    const [newEmail] = await db.insert(emails).values(email).returning();
+    return newEmail;
+  }
+  
+  async updateEmail(id: number, email: Partial<InsertEmail>): Promise<Email> {
+    const [updatedEmail] = await db
+      .update(emails)
+      .set(email)
+      .where(eq(emails.id, id))
+      .returning();
+    
+    if (!updatedEmail) {
+      throw new Error("Email not found");
+    }
+    
+    return updatedEmail;
+  }
+  
+  async markEmailAsSent(id: number): Promise<Email> {
+    const [updatedEmail] = await db
+      .update(emails)
+      .set({
+        status: 'sent',
+        sent_at: new Date()
+      })
+      .where(eq(emails.id, id))
+      .returning();
+    
+    if (!updatedEmail) {
+      throw new Error("Email not found");
+    }
+    
+    return updatedEmail;
+  }
+  
+  async markEmailAsOpened(id: number): Promise<Email> {
+    const email = await this.getEmail(id);
+    if (!email) {
+      throw new Error("Email not found");
+    }
+    
+    const [updatedEmail] = await db
+      .update(emails)
+      .set({
+        opened_at: new Date()
+      })
+      .where(eq(emails.id, id))
+      .returning();
+    
+    // Update campaign stats if part of a campaign
+    if (email.campaignId) {
+      await db
+        .update(emailCampaigns)
+        .set({
+          openCount: sql`${emailCampaigns.openCount} + 1`
+        })
+        .where(eq(emailCampaigns.id, email.campaignId));
+    }
+    
+    return updatedEmail;
+  }
+  
+  async markEmailAsClicked(id: number): Promise<Email> {
+    const email = await this.getEmail(id);
+    if (!email) {
+      throw new Error("Email not found");
+    }
+    
+    const [updatedEmail] = await db
+      .update(emails)
+      .set({
+        clicked_at: new Date()
+      })
+      .where(eq(emails.id, id))
+      .returning();
+    
+    // Update campaign stats if part of a campaign
+    if (email.campaignId) {
+      await db
+        .update(emailCampaigns)
+        .set({
+          clickCount: sql`${emailCampaigns.clickCount} + 1`
+        })
+        .where(eq(emailCampaigns.id, email.campaignId));
+    }
+    
+    return updatedEmail;
+  }
+  
+  async markEmailAsReplied(id: number): Promise<Email> {
+    const [updatedEmail] = await db
+      .update(emails)
+      .set({
+        replied_at: new Date()
+      })
+      .where(eq(emails.id, id))
+      .returning();
+    
+    if (!updatedEmail) {
+      throw new Error("Email not found");
+    }
+    
+    return updatedEmail;
+  }
+  
+  async generateEmailWithAI(contactId: number, promptTemplate: string): Promise<Email> {
+    const contact = await this.getContact(contactId);
+    if (!contact) {
+      throw new Error("Contact not found");
+    }
+    
+    const { GoogleGenerativeAI } = await import("@google/generative-ai");
+    
+    try {
+      // Initialize the Google Generative AI API with the key from environment
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error("Gemini API key not found in environment variables");
+      }
+      
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      
+      // Replace placeholders in template with contact info
+      let personalizedPrompt = promptTemplate
+        .replace(/\{name\}/g, contact.firstName || "")
+        .replace(/\{firstName\}/g, contact.firstName || "")
+        .replace(/\{lastName\}/g, contact.lastName || "")
+        .replace(/\{company\}/g, contact.company || "")
+        .replace(/\{position\}/g, contact.position || "");
+      
+      // Ask Gemini to generate email content
+      const result = await model.generateContent(personalizedPrompt);
+      const response = await result.response;
+      const emailContent = response.text();
+      
+      // Extract subject from content or create default one
+      let subject = `Email for ${contact.firstName || contact.email}`;
+      // Try to extract subject from the generated text (assuming format like "Subject: XYZ\n\nDear...")
+      const subjectMatch = emailContent.match(/Subject:([^\n]+)/i);
+      if (subjectMatch && subjectMatch[1]) {
+        subject = subjectMatch[1].trim();
+      }
+      
+      // Create new email
+      const newEmail: InsertEmail = {
+        contactId: contactId,
+        campaignId: null,
+        subject: subject,
+        content: emailContent,
+        status: 'draft',
+        direction: 'outbound',
+        generatedByAI: true,
+        aiPrompt: promptTemplate
+      };
+      
+      return this.createEmail(newEmail);
+    } catch (error) {
+      console.error("Error generating email with AI:", error);
+      
+      // Fallback to a basic email if AI generation fails
+      const newEmail: InsertEmail = {
+        contactId: contactId,
+        campaignId: null,
+        subject: `Email for ${contact.firstName || contact.email}`,
+        content: `Dear ${contact.firstName || "customer"},\n\nThis is a fallback email as we encountered an issue with AI generation.\n\nBest regards,\nThe Team`,
+        status: 'draft',
+        direction: 'outbound',
+        generatedByAI: true,
+        aiPrompt: promptTemplate
+      };
+      
+      return this.createEmail(newEmail);
+    }
+  }
+  
+  async reviewAndApproveEmail(id: number, reviewerId: number, content?: string): Promise<Email> {
+    const email = await this.getEmail(id);
+    if (!email) {
+      throw new Error("Email not found");
+    }
+    
+    const [updatedEmail] = await db
+      .update(emails)
+      .set({
+        status: 'approved',
+        reviewedById: reviewerId,
+        content: content || email.content
+      })
+      .where(eq(emails.id, id))
+      .returning();
+    
+    return updatedEmail;
   }
 }
 
