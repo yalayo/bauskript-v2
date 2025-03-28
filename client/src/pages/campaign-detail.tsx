@@ -38,6 +38,18 @@ export default function CampaignDetail() {
     },
   });
   
+  // Check Gmail connection status
+  const { data: gmailStatus } = useQuery({
+    queryKey: ['/api/gmail/status'],
+    queryFn: async () => {
+      const response = await fetch('/api/gmail/status');
+      if (!response.ok) {
+        return { authenticated: false };
+      }
+      return response.json();
+    },
+  });
+  
   // Campaign stats
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['/api/email-campaigns', campaignId, 'stats'],
@@ -190,37 +202,55 @@ export default function CampaignDetail() {
           </p>
         </div>
         
-        <div className="mt-4 md:mt-0 flex gap-2">
-          {campaign.status === 'paused' || campaign.status === 'draft' ? (
+        <div className="mt-4 md:mt-0 flex flex-col gap-2 items-end">
+          <div className="flex gap-2">
+            {campaign.status === 'paused' || campaign.status === 'draft' ? (
+              <Button 
+                onClick={handleResume} 
+                disabled={resumeMutation.isPending || !(gmailStatus?.authenticated)}
+                className="gap-2"
+                title={!gmailStatus?.authenticated ? "Gmail authentication required to run campaigns" : ""}
+              >
+                {resumeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                Resume
+              </Button>
+            ) : campaign.status === 'running' || campaign.status === 'scheduled' ? (
+              <Button 
+                onClick={handlePause} 
+                variant="outline" 
+                disabled={pauseMutation.isPending}
+                className="gap-2"
+              >
+                {pauseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
+                Pause
+              </Button>
+            ) : null}
+            
             <Button 
-              onClick={handleResume} 
-              disabled={resumeMutation.isPending}
+              onClick={handleProcessEmail}
+              variant="secondary"
+              disabled={processEmailMutation.isPending || campaign.status !== 'running' || !(gmailStatus?.authenticated)}
               className="gap-2"
+              title={!gmailStatus?.authenticated ? "Gmail authentication required to process emails" : ""}
             >
-              {resumeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              Resume
+              {processEmailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Process Next Email
             </Button>
-          ) : campaign.status === 'running' || campaign.status === 'scheduled' ? (
-            <Button 
-              onClick={handlePause} 
-              variant="outline" 
-              disabled={pauseMutation.isPending}
-              className="gap-2"
-            >
-              {pauseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
-              Pause
-            </Button>
-          ) : null}
+          </div>
           
-          <Button 
-            onClick={handleProcessEmail}
-            variant="secondary"
-            disabled={processEmailMutation.isPending || campaign.status !== 'running'}
-            className="gap-2"
-          >
-            {processEmailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            Process Next Email
-          </Button>
+          {!gmailStatus?.authenticated && (
+            <div className="text-xs text-red-500 flex items-center mt-1">
+              <span>Gmail authentication required</span>
+              <Button 
+                variant="link" 
+                size="sm" 
+                className="h-auto p-0 ml-1" 
+                onClick={() => navigate('/gmail-auth')}
+              >
+                Connect Gmail
+              </Button>
+            </div>
+          )}
         </div>
       </div>
       

@@ -118,6 +118,15 @@ export default function CampaignProcessingInfo({ campaignId }: CampaignProcessin
                 <p className="text-lg font-bold">{data.remainingContacts}</p>
               </div>
             </div>
+            
+            {data.remainingContacts > 0 && (
+              <div className="mt-4 p-2 bg-primary/5 rounded text-sm text-muted-foreground border border-primary/10">
+                <p className="flex items-center">
+                  <Mail className="h-4 w-4 mr-2 text-primary" /> 
+                  Emails are automatically sent every 220 seconds (3.67 minutes)
+                </p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

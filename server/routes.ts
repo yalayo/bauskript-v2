@@ -7,6 +7,11 @@ import path from "path";
 import { read, utils } from "xlsx";
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 import { 
+  startCampaignProcessing, 
+  stopCampaignProcessing, 
+  initializeEmailProcessing 
+} from "./email-processor";
+import { 
   insertProjectSchema, 
   insertDailyReportSchema, 
   insertAttendanceSchema, 
@@ -842,6 +847,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const updatedCampaign = await storage.pauseEmailCampaign(id);
+      
+      // Stop the email processing for this campaign
+      stopCampaignProcessing(id);
+      
       res.json(updatedCampaign);
     } catch (error) {
       next(error);
@@ -854,6 +863,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const updatedCampaign = await storage.resumeEmailCampaign(id);
+      
+      // Start the email processing for this campaign
+      await startCampaignProcessing(id);
+      
       res.json(updatedCampaign);
     } catch (error) {
       next(error);
@@ -1621,6 +1634,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   const httpServer = createServer(app);
+  
+  // Initialize email processing for all running campaigns
+  // Important: This must be done after all routes are set up
+  initializeEmailProcessing().catch(err => {
+    console.error('Failed to initialize email processing:', err);
+  });
 
   return httpServer;
 }
