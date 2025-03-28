@@ -614,6 +614,149 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Email AI Content Generation Routes
+  app.post("/api/emails/generate-from-template", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { templateType, subject } = req.body;
+      
+      if (!templateType || !subject) {
+        return res.status(400).json({ message: "Template type and subject are required" });
+      }
+      
+      const { GoogleGenerativeAI } = await import("@google/generative-ai");
+      
+      // Initialize the Google Generative AI API with the key from environment
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ message: "Gemini API key not configured" });
+      }
+      
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      
+      // Create a prompt based on the template type and subject
+      let prompt = `Write a professional email about "${subject}" for a construction company. `;
+      
+      switch (templateType) {
+        case "introduction":
+          prompt += `This should be a first contact email introducing our construction services to potential clients. Highlight our expertise, reliability, and quality workmanship.`;
+          break;
+        case "follow-up":
+          prompt += `This should be a follow-up email after an initial meeting or conversation. Reference previous discussions and provide next steps to move forward.`;
+          break;
+        case "proposal":
+          prompt += `This should be a proposal email outlining specific services and benefits we can offer. Include a clear value proposition and call to action.`;
+          break;
+        case "newsletter":
+          prompt += `This should be a newsletter-style email with updates about our company, industry trends, and valuable information for clients.`;
+          break;
+        case "reminder":
+          prompt += `This should be a gentle reminder email about an upcoming deadline, meeting, or payment. Be professional but clear about what action is needed.`;
+          break;
+        case "thank-you":
+          prompt += `This should be a thank you email expressing appreciation for their business, meeting, or opportunity to provide a quote.`;
+          break;
+        case "invitation":
+          prompt += `This should be an invitation email for an event, site visit, or consultation. Include necessary details and encourage response.`;
+          break;
+        default:
+          prompt += `Write a professional email that is clear, concise, and ends with a specific call to action.`;
+      }
+      
+      prompt += `\n\nThe email should:
+      1. Have a professional subject line
+      2. Include a proper greeting
+      3. Be concise but comprehensive
+      4. Include appropriate placeholders like {firstName}, {company}, or {position} where relevant
+      5. End with a clear call to action
+      6. Include a professional signature
+      
+      Return the response in the following format:
+      SUBJECT: [Your generated subject line]
+      
+      [The full email content]`;
+      
+      // Generate content using Gemini
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+      
+      // Extract subject and content from the generated text
+      const subjectMatch = text.match(/SUBJECT:\s*(.+?)(?:\n\n|\n)/);
+      const generatedSubject = subjectMatch ? subjectMatch[1].trim() : subject;
+      
+      // Remove the "SUBJECT:" part to get only the content
+      const content = text.replace(/SUBJECT:\s*(.+?)(?:\n\n|\n)/, "").trim();
+      
+      res.json({
+        subject: generatedSubject,
+        content: content,
+      });
+    } catch (error) {
+      console.error("Error generating email content from template:", error);
+      res.status(500).json({ message: "Failed to generate content", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+  
+  app.post("/api/emails/generate-from-prompt", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { prompt } = req.body;
+      
+      if (!prompt) {
+        return res.status(400).json({ message: "Prompt is required" });
+      }
+      
+      const { GoogleGenerativeAI } = await import("@google/generative-ai");
+      
+      // Initialize the Google Generative AI API with the key from environment
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ message: "Gemini API key not configured" });
+      }
+      
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      
+      // Add formatting instructions to the prompt
+      const enhancedPrompt = `${prompt}\n\nPlease write this as a professional email with:
+      1. A compelling subject line
+      2. A proper greeting
+      3. Professional and concise body content
+      4. A clear call to action
+      5. A professional signature
+      6. Include appropriate placeholders like {firstName}, {company}, or {position} where relevant
+      
+      Return the response in the following format:
+      SUBJECT: [Your generated subject line]
+      
+      [The full email content]`;
+      
+      // Generate content using Gemini
+      const result = await model.generateContent(enhancedPrompt);
+      const response = await result.response;
+      const text = response.text();
+      
+      // Extract subject and content from the generated text
+      const subjectMatch = text.match(/SUBJECT:\s*(.+?)(?:\n\n|\n)/);
+      const subject = subjectMatch ? subjectMatch[1].trim() : "Generated Email";
+      
+      // Remove the "SUBJECT:" part to get only the content
+      const content = text.replace(/SUBJECT:\s*(.+?)(?:\n\n|\n)/, "").trim();
+      
+      res.json({
+        subject,
+        content,
+      });
+    } catch (error) {
+      console.error("Error generating email content from custom prompt:", error);
+      res.status(500).json({ message: "Failed to generate content", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
   // Questionnaire routes
   app.post("/api/questionnaire", async (req, res, next) => {
     try {

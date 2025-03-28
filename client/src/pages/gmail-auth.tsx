@@ -71,8 +71,9 @@ export default function GmailAuthPage() {
   }
 
   const handleConnect = () => {
+    console.log('Connecting to Gmail with redirect path:', location);
     // Redirect to Google auth endpoint with current location for redirect back
-    window.location.href = `/api/auth/google?redirect=${encodeURIComponent(location || "/")}`;
+    window.location.href = `/api/auth/google?redirect=${encodeURIComponent(location || "/gmail-auth")}`;
   };
 
   const handleDisconnect = () => {

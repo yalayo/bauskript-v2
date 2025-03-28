@@ -71,12 +71,25 @@ export function setupAuth(app: Express) {
   
   // Google OAuth strategy
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    console.log('Setting up Google OAuth strategy with:');
+    console.log('- Client ID:', process.env.GOOGLE_CLIENT_ID.substring(0, 8) + '...');
+    
+    // Determine the host for the callback URL automatically if not provided
+    let callbackUrl = process.env.GOOGLE_REDIRECT_URI;
+    if (!callbackUrl) {
+      // Default to current host
+      callbackUrl = "/api/oauth/callback";
+      console.log('- Using relative callback URL:', callbackUrl);
+    } else {
+      console.log('- Using configured callback URL:', callbackUrl);
+    }
+    
     passport.use(
       new GoogleStrategy(
         {
           clientID: process.env.GOOGLE_CLIENT_ID,
           clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-          callbackURL: process.env.GOOGLE_REDIRECT_URI || "http://localhost:3000/api/oauth/callback",
+          callbackURL: callbackUrl,
           scope: ['profile', 'email']
         },
         async (accessToken, refreshToken, profile, done) => {
@@ -198,6 +211,9 @@ export function setupAuth(app: Express) {
       req.session.oauth2ReturnTo = req.query.redirect as string;
     }
     
+    console.log('Starting Google OAuth flow at:', new Date().toISOString());
+    console.log('User will be redirected back to:', req.session.oauth2ReturnTo || '/');
+    
     passport.authenticate("google", { 
       scope: [
         "profile", 
@@ -210,15 +226,37 @@ export function setupAuth(app: Express) {
     })(req, res, next);
   });
   
-  app.get("/api/oauth/callback", 
-    passport.authenticate("google", { failureRedirect: "/auth" }),
-    (req, res) => {
-      // Redirect to the stored URL or default to homepage
-      const redirectUrl = req.session.oauth2ReturnTo || "/";
-      delete req.session.oauth2ReturnTo;
-      res.redirect(redirectUrl);
-    }
-  );
+  app.get("/api/oauth/callback", (req, res, next) => {
+    console.log('Received callback from Google OAuth at:', new Date().toISOString());
+    console.log('Query parameters:', req.query);
+    
+    passport.authenticate("google", { failureRedirect: "/auth" }, (err, user, info) => {
+      if (err) {
+        console.error('Error during Google authentication:', err);
+        return next(err);
+      }
+      
+      if (!user) {
+        console.log('Authentication failed, no user returned');
+        return res.redirect('/auth');
+      }
+      
+      console.log('Google authentication successful for user:', user.username);
+      
+      req.login(user, (err) => {
+        if (err) {
+          console.error('Error during login after OAuth:', err);
+          return next(err);
+        }
+        
+        // Redirect to the stored URL or default to homepage
+        const redirectUrl = req.session.oauth2ReturnTo || "/";
+        console.log('Redirecting to:', redirectUrl);
+        delete req.session.oauth2ReturnTo;
+        res.redirect(redirectUrl);
+      });
+    })(req, res, next);
+  });
   
   // Gmail API authorization status
   app.get("/api/gmail/status", (req, res) => {
