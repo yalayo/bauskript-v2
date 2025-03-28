@@ -151,6 +151,23 @@ export const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
             <span>Email Campaigns</span>
           </a>
           <a
+            href="/gmail-auth"
+            onClick={(e) => {
+              if (location === "/gmail-auth") {
+                e.preventDefault();
+                if (window.innerWidth < 1024) {
+                  toggleSidebar();
+                }
+              }
+            }}
+            className={`sidebar-link ${
+              location === "/gmail-auth" ? "active" : ""
+            }`}
+          >
+            <i className="fab fa-google"></i>
+            <span>Gmail Connection</span>
+          </a>
+          <a
             href="/blog"
             onClick={(e) => {
               if (location === "/blog") {

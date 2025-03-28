@@ -1,11 +1,20 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { Express } from "express";
+import { Strategy as GoogleStrategy, Profile } from "passport-google-oauth20";
+import { Express, Request } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
+import { getTokensFromCode, getUserInfo } from "./gmail";
+
+// Extend the session interface to include our custom fields
+declare module 'express-session' {
+  interface SessionData {
+    oauth2ReturnTo?: string;
+  }
+}
 
 declare global {
   namespace Express {
@@ -44,6 +53,7 @@ export function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
+  // Local authentication strategy
   passport.use(
     new LocalStrategy(async (username, password, done) => {
       try {
@@ -58,6 +68,66 @@ export function setupAuth(app: Express) {
       }
     }),
   );
+  
+  // Google OAuth strategy
+  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    passport.use(
+      new GoogleStrategy(
+        {
+          clientID: process.env.GOOGLE_CLIENT_ID,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          callbackURL: process.env.GOOGLE_REDIRECT_URI || "http://localhost:3000/api/oauth/callback",
+          scope: ['profile', 'email']
+        },
+        async (accessToken, refreshToken, profile, done) => {
+          try {
+            // Check if user exists with this Google ID
+            let user = await storage.getUserByGoogleId(profile.id);
+            
+            if (user) {
+              // Update tokens
+              user = await storage.updateUserGoogleTokens(user.id, {
+                accessToken,
+                refreshToken,
+                expiryDate: new Date(Date.now() + 3600 * 1000) // 1 hour from now
+              });
+              return done(null, user);
+            }
+            
+            // Create a new user
+            const email = profile.emails && profile.emails[0] ? profile.emails[0].value : '';
+            const fullName = profile.displayName || '';
+            
+            // Generate unique username from email or Google ID
+            const baseUsername = email.split('@')[0] || `google_${profile.id}`;
+            let username = baseUsername;
+            let counter = 1;
+            
+            // Ensure unique username
+            while (await storage.getUserByUsername(username)) {
+              username = `${baseUsername}_${counter++}`;
+            }
+            
+            // Create the user with Google information
+            const newUser = await storage.saveGoogleUser({
+              googleId: profile.id,
+              googleEmail: email,
+              googleAccessToken: accessToken,
+              googleRefreshToken: refreshToken || '',
+              googleTokenExpiry: new Date(Date.now() + 3600 * 1000), // 1 hour from now
+              username,
+              email,
+              fullName
+            });
+            
+            return done(null, newUser);
+          } catch (error) {
+            return done(error as Error);
+          }
+        }
+      )
+    );
+  }
 
   passport.serializeUser((user, done) => done(null, user.id));
   passport.deserializeUser(async (id: number, done) => {
@@ -93,7 +163,7 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err, user, info) => {
+    passport.authenticate("local", (err: Error | null, user: SelectUser | false, info: any) => {
       if (err) return next(err);
       if (!user) {
         return res.status(401).json({ message: "Invalid username or password" });
@@ -119,5 +189,67 @@ export function setupAuth(app: Express) {
     // Don't send password back to the client
     const { password, ...userWithoutPassword } = req.user as SelectUser;
     res.json(userWithoutPassword);
+  });
+  
+  // Google OAuth routes
+  app.get("/api/auth/google", (req, res, next) => {
+    // Store the redirect URL in the session for after successful authentication
+    if (req.query.redirect) {
+      req.session.oauth2ReturnTo = req.query.redirect as string;
+    }
+    
+    passport.authenticate("google", { 
+      scope: [
+        "profile", 
+        "email",
+        "https://www.googleapis.com/auth/gmail.send",
+        "https://www.googleapis.com/auth/gmail.readonly"
+      ],
+      accessType: "offline",
+      prompt: "consent" // Force approval prompt to get refresh token
+    })(req, res, next);
+  });
+  
+  app.get("/api/oauth/callback", 
+    passport.authenticate("google", { failureRedirect: "/auth" }),
+    (req, res) => {
+      // Redirect to the stored URL or default to homepage
+      const redirectUrl = req.session.oauth2ReturnTo || "/";
+      delete req.session.oauth2ReturnTo;
+      res.redirect(redirectUrl);
+    }
+  );
+  
+  // Gmail API authorization status
+  app.get("/api/gmail/status", (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    const user = req.user as SelectUser;
+    const hasGmailAuth = !!(user.googleAccessToken && user.googleRefreshToken);
+    
+    res.json({
+      authenticated: hasGmailAuth,
+      email: user.googleEmail || user.email
+    });
+  });
+  
+  // Gmail revoke access
+  app.post("/api/gmail/revoke", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const user = req.user as SelectUser;
+      
+      // Clear Google OAuth information
+      await storage.updateUserGoogleTokens(user.id, {
+        accessToken: "",
+        refreshToken: "",
+        expiryDate: undefined
+      });
+      
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
   });
 }

@@ -70,6 +70,10 @@
     @apply text-primary;
   }
   
+  .mobile-nav-extra {
+    @apply flex flex-col items-center justify-center text-gray-600 py-3 rounded-md hover:bg-gray-100;
+  }
+  
   .stat-card {
     @apply bg-white rounded-lg shadow-sm p-6;
   }

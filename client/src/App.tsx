@@ -15,6 +15,7 @@ import AttendancePage from "@/pages/attendance";
 import PhotoGalleryPage from "@/pages/photo-gallery";
 import IssuesPage from "@/pages/issues";
 import EmailCampaignsPage from "@/pages/email-campaigns";
+import GmailAuthPage from "@/pages/gmail-auth";
 import BlogPage from "@/pages/blog";
 import SettingsPage from "@/pages/settings";
 import CheckoutPage from "@/pages/checkout";
@@ -34,6 +35,7 @@ function Router() {
         <ProtectedRoute path="/photos" component={PhotoGalleryPage} />
         <ProtectedRoute path="/issues" component={IssuesPage} />
         <ProtectedRoute path="/email-campaigns" component={EmailCampaignsPage} />
+        <ProtectedRoute path="/gmail-auth" component={GmailAuthPage} />
         <ProtectedRoute path="/blog" component={BlogPage} />
         <ProtectedRoute path="/settings" component={SettingsPage} />
         <ProtectedRoute path="/survey-analytics" component={SurveyAnalyticsPage} />

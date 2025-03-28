@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, PlusCircle, Mail, Send, BarChart3 } from "lucide-react";
+import { Loader2, PlusCircle, Mail, Send, BarChart3, AlertCircle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -19,24 +19,41 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import CampaignForm from "@/components/email/campaign-form";
 import CampaignList from "@/components/email/campaign-list";
 import ContactForm from "@/components/email/contact-form";
 import ContactsList from "@/components/email/contacts-list";
 import { useQuery } from "@tanstack/react-query";
 import { EmailCampaign } from "@shared/schema";
+import { getQueryFn } from "@/lib/queryClient";
+import { useLocation } from "wouter";
 
 export default function EmailCampaigns() {
   const { user, isLoading: authLoading } = useAuth();
   const [openCampaignDialog, setOpenCampaignDialog] = useState(false);
   const [openContactDialog, setOpenContactDialog] = useState(false);
+  const [, navigate] = useLocation();
+  
+  // Define the response type for Gmail status
+  type GmailStatusResponse = {
+    authenticated: boolean;
+    email: string;
+  };
+  
+  // Check Gmail authorization status
+  const { data: gmailStatus, isLoading: gmailStatusLoading } = useQuery<GmailStatusResponse>({
+    queryKey: ["/api/gmail/status"],
+    queryFn: getQueryFn<GmailStatusResponse>({ on401: "returnNull" }),
+    enabled: !!user
+  });
   
   // Fetch email campaigns data
   const { data: campaigns = [], isLoading: campaignsLoading } = useQuery<EmailCampaign[]>({
     queryKey: ["/api/email-campaigns"],
   });
 
-  const isLoading = authLoading || campaignsLoading;
+  const isLoading = authLoading || campaignsLoading || gmailStatusLoading;
 
   if (isLoading) {
     return (
@@ -55,6 +72,25 @@ export default function EmailCampaigns() {
     <div className="container max-w-6xl mx-auto p-4">
       <h1 className="text-3xl font-bold mb-2">Email Campaigns</h1>
       <p className="text-muted-foreground mb-6">Create and manage your email marketing campaigns</p>
+      
+      {/* Gmail Connection Banner */}
+      {!gmailStatus?.authenticated && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Gmail Connection Required</AlertTitle>
+          <AlertDescription>
+            Connect your Gmail account to send emails from our application.
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="ml-4"
+              onClick={() => navigate("/gmail-auth")}
+            >
+              Connect Gmail
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <Card>

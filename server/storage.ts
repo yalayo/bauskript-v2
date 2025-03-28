@@ -288,7 +288,12 @@ export class MemStorage implements IStorage {
       stripeSubscriptionId: null,
       email: insertUser.email || null,
       role: insertUser.role || null,
-      fullName: insertUser.fullName || null
+      fullName: insertUser.fullName || null,
+      googleId: null,
+      googleAccessToken: null,
+      googleRefreshToken: null,
+      googleTokenExpiry: null,
+      googleEmail: null
     };
     this.users.set(id, user);
     return user;
@@ -316,6 +321,85 @@ export class MemStorage implements IStorage {
     };
     this.users.set(id, updatedUser);
     return updatedUser;
+  }
+
+  async getUserByGoogleId(googleId: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(
+      (user) => user.googleId === googleId
+    );
+  }
+
+  async updateUserGoogleTokens(id: number, tokens: { accessToken: string, refreshToken?: string, expiryDate?: Date }): Promise<User> {
+    const user = await this.getUser(id);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    
+    const updatedUser = { 
+      ...user, 
+      googleAccessToken: tokens.accessToken,
+      googleTokenExpiry: tokens.expiryDate || null
+    };
+    
+    // Only update refresh token if provided
+    if (tokens.refreshToken) {
+      updatedUser.googleRefreshToken = tokens.refreshToken;
+    }
+    
+    this.users.set(id, updatedUser);
+    return updatedUser;
+  }
+
+  async saveGoogleUser(userData: { 
+    googleId: string, 
+    googleEmail: string, 
+    googleAccessToken: string, 
+    googleRefreshToken: string, 
+    googleTokenExpiry: Date, 
+    username: string, 
+    email: string, 
+    fullName?: string 
+  }): Promise<User> {
+    // Check if user already exists with this Google ID
+    const existingUser = await this.getUserByGoogleId(userData.googleId);
+    
+    if (existingUser) {
+      // Update existing user with new tokens
+      const updatedUser = {
+        ...existingUser,
+        googleAccessToken: userData.googleAccessToken,
+        googleRefreshToken: userData.googleRefreshToken,
+        googleTokenExpiry: userData.googleTokenExpiry,
+        googleEmail: userData.googleEmail,
+        // Update email and fullName if they've changed
+        email: userData.email || existingUser.email,
+        fullName: userData.fullName || existingUser.fullName
+      };
+      
+      this.users.set(existingUser.id, updatedUser);
+      return updatedUser;
+    }
+    
+    // Create new user
+    const id = this.userCurrentId++;
+    const newUser: User = {
+      id,
+      username: userData.username,
+      password: "oauth-user", // Set a placeholder password for OAuth users
+      email: userData.email,
+      fullName: userData.fullName || null,
+      role: "user",
+      stripeCustomerId: null,
+      stripeSubscriptionId: null,
+      googleId: userData.googleId,
+      googleAccessToken: userData.googleAccessToken,
+      googleRefreshToken: userData.googleRefreshToken,
+      googleTokenExpiry: userData.googleTokenExpiry,
+      googleEmail: userData.googleEmail
+    };
+    
+    this.users.set(id, newUser);
+    return newUser;
   }
 
   // Project methods
@@ -1107,6 +1191,70 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(users.id, id))
       .returning();
+    return user;
+  }
+  
+  async getUserByGoogleId(googleId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.googleId, googleId));
+    return user;
+  }
+  
+  async updateUserGoogleTokens(id: number, tokens: { accessToken: string, refreshToken?: string, expiryDate?: Date }): Promise<User> {
+    const updateData: Partial<User> = {
+      googleAccessToken: tokens.accessToken,
+      googleTokenExpiry: tokens.expiryDate || null
+    };
+    
+    // Only update refresh token if provided
+    if (tokens.refreshToken) {
+      updateData.googleRefreshToken = tokens.refreshToken;
+    }
+    
+    const [user] = await db
+      .update(users)
+      .set(updateData)
+      .where(eq(users.id, id))
+      .returning();
+      
+    return user;
+  }
+  
+  async saveGoogleUser(userData: { 
+    googleId: string, 
+    googleEmail: string, 
+    googleAccessToken: string, 
+    googleRefreshToken: string, 
+    googleTokenExpiry: Date, 
+    username: string, 
+    email: string, 
+    fullName?: string 
+  }): Promise<User> {
+    // Check if user with this Google ID already exists
+    const existingUser = await this.getUserByGoogleId(userData.googleId);
+    
+    if (existingUser) {
+      // Update the existing user with new tokens
+      return this.updateUserGoogleTokens(existingUser.id, {
+        accessToken: userData.googleAccessToken,
+        refreshToken: userData.googleRefreshToken,
+        expiryDate: userData.googleTokenExpiry
+      });
+    }
+    
+    // Create a new user
+    const [user] = await db.insert(users).values({
+      username: userData.username,
+      password: "oauth-user", // Set a placeholder password for OAuth users
+      email: userData.email,
+      fullName: userData.fullName || null,
+      role: "user",
+      googleId: userData.googleId,
+      googleAccessToken: userData.googleAccessToken,
+      googleRefreshToken: userData.googleRefreshToken,
+      googleTokenExpiry: userData.googleTokenExpiry,
+      googleEmail: userData.googleEmail
+    }).returning();
+    
     return user;
   }
 
