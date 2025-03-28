@@ -4,7 +4,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { EmailCampaign } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Trash2, PauseCircle, PlayCircle, Calendar } from "lucide-react";
+import { Trash2, PauseCircle, PlayCircle, Calendar, ExternalLink, Eye } from "lucide-react";
+import { useLocation } from "wouter";
 import {
   Table,
   TableBody,
@@ -29,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 export default function CampaignList() {
   const { toast } = useToast();
   const [selectedCampaign, setSelectedCampaign] = useState<number | null>(null);
+  const [, navigate] = useLocation();
 
   const { data: campaigns, isLoading } = useQuery<EmailCampaign[]>({
     queryKey: ["/api/email-campaigns"],
@@ -139,6 +141,14 @@ export default function CampaignList() {
               </TableCell>
               <TableCell>
                 <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => navigate(`/campaign-detail/${campaign.id}`)}
+                    title="View Details"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
                   {campaign.status === "running" && (
                     <Button
                       variant="outline"

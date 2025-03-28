@@ -801,6 +801,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
       next(error);
     }
   });
+  
+  app.get("/api/email-campaigns/:id/processing-info", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Get the campaign to verify it exists
+      const campaign = await storage.getEmailCampaign(id);
+      if (!campaign) {
+        return res.status(404).json({ message: "Email campaign not found" });
+      }
+      
+      // Get current and next contacts for processing
+      const processingInfo = await storage.getCampaignProcessingInfo(id);
+      res.json(processingInfo);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  app.get("/api/email-campaigns/:id/stats", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Get the campaign stats
+      const stats = await storage.getEmailCampaignStats(id);
+      res.json(stats);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  app.post("/api/email-campaigns/:id/pause", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const id = parseInt(req.params.id);
+      const updatedCampaign = await storage.pauseEmailCampaign(id);
+      res.json(updatedCampaign);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  app.post("/api/email-campaigns/:id/resume", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const id = parseInt(req.params.id);
+      const updatedCampaign = await storage.resumeEmailCampaign(id);
+      res.json(updatedCampaign);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  app.post("/api/process-email", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const { campaignId } = req.body;
+      
+      if (!campaignId) {
+        return res.status(400).json({ message: "Campaign ID is required" });
+      }
+      
+      // Get the campaign
+      const campaign = await storage.getEmailCampaign(parseInt(campaignId));
+      if (!campaign) {
+        return res.status(404).json({ message: "Campaign not found" });
+      }
+      
+      // Get processing info to find current contact
+      const processingInfo = await storage.getCampaignProcessingInfo(parseInt(campaignId));
+      
+      if (!processingInfo.currentContact) {
+        return res.json({ 
+          status: "complete", 
+          message: "No more contacts to process for this campaign" 
+        });
+      }
+      
+      // Process the current contact (this would normally happen on a schedule)
+      // In a real implementation, this would handle the email sending logic
+      
+      // For demo purposes, just mark the contact as processed
+      await storage.markContactAsProcessed(processingInfo.currentContact.id);
+      
+      // And create an email record
+      const email = await storage.createEmail({
+        campaignId: parseInt(campaignId),
+        contactId: processingInfo.currentContact.id,
+        subject: campaign.subject,
+        content: campaign.content,
+        status: 'sent',
+        sentAt: new Date(),
+        direction: 'outbound'
+      });
+      
+      // Update campaign stats
+      await storage.updateEmailCampaign(parseInt(campaignId), {
+        sentCount: (campaign.sentCount || 0) + 1
+      });
+      
+      return res.json({ 
+        status: "success", 
+        message: `Email sent to ${processingInfo.currentContact.email}`,
+        emailId: email.id
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   app.post("/api/email-campaigns", async (req, res, next) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);

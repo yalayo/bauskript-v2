@@ -102,6 +102,14 @@ export interface IStorage {
   createEmailCampaign(campaign: InsertEmailCampaign): Promise<EmailCampaign>;
   updateEmailCampaign(id: number, campaign: Partial<InsertEmailCampaign>): Promise<EmailCampaign>;
   getEmailCampaignStats(id: number): Promise<any>;
+  getCampaignProcessingInfo(id: number): Promise<{ 
+    campaignId: number;
+    currentContact: Contact | null;
+    nextContact: Contact | null;
+    totalProcessed: number;
+    totalScheduled: number;
+    remainingContacts: number;
+  }>;
   scheduleEmailCampaign(id: number, date: Date): Promise<EmailCampaign>;
   pauseEmailCampaign(id: number): Promise<EmailCampaign>;
   resumeEmailCampaign(id: number): Promise<EmailCampaign>;
@@ -951,6 +959,53 @@ export class MemStorage implements IStorage {
     
     this.emailCampaigns.set(id, updatedCampaign);
     return updatedCampaign;
+  }
+  
+  async getCampaignProcessingInfo(id: number): Promise<{ 
+    campaignId: number;
+    currentContact: Contact | null;
+    nextContact: Contact | null;
+    totalProcessed: number;
+    totalScheduled: number;
+    remainingContacts: number;
+  }> {
+    const campaign = await this.getEmailCampaign(id);
+    if (!campaign) {
+      throw new Error("Email campaign not found");
+    }
+    
+    // Get all emails for this campaign
+    const campaignEmails = Array.from(this.emails.values())
+      .filter(email => email.campaignId === id);
+    
+    // Get all processed contact IDs
+    const processedContactIds = new Set(
+      campaignEmails.map(email => email.contactId)
+    );
+    
+    // Get all contacts that have been scheduled
+    const scheduledContacts = Array.from(this.contacts.values())
+      .filter(contact => contact.scheduledForProcessing === true);
+    
+    // Find current contact in process (scheduled but not processed)
+    const currentContact = scheduledContacts.find(
+      contact => !contact.processedAt && !processedContactIds.has(contact.id)
+    ) || null;
+    
+    // Find next contact to process (after current)
+    const remainingContacts = scheduledContacts
+      .filter(contact => !contact.processedAt && !processedContactIds.has(contact.id) && contact !== currentContact);
+    
+    const nextContact = remainingContacts.length > 0 ? remainingContacts[0] : null;
+    
+    return {
+      campaignId: id,
+      currentContact,
+      nextContact,
+      totalProcessed: processedContactIds.size,
+      totalScheduled: scheduledContacts.length,
+      remainingContacts: remainingContacts.length + (currentContact ? 1 : 0)
+    };
   }
   
   // Contact methods
@@ -1896,6 +1951,127 @@ export class DatabaseStorage implements IStorage {
     return updatedCampaign;
   }
   
+  async getCampaignProcessingInfo(id: number): Promise<{ 
+    currentContact: Contact | null;
+    nextContact: Contact | null;
+    progress: {
+      total: number;
+      processed: number;
+      scheduled: number;
+      remaining: number;
+      percentComplete: number;
+    };
+    lastProcessedAt: string | null;
+    estimatedCompletionTime: string | null;
+  }> {
+    // Check if campaign exists
+    const campaign = await this.getEmailCampaign(id);
+    if (!campaign) {
+      throw new Error("Email campaign not found");
+    }
+    
+    // Get all emails sent for this campaign to identify processed contacts
+    const campaignEmails = await db
+      .select()
+      .from(emails)
+      .where(eq(emails.campaignId, id));
+    
+    // Get a list of all contact IDs that have already been processed
+    const processedContactIds = new Set(
+      campaignEmails.map(email => email.contactId)
+    );
+    
+    // Get all contacts for this campaign
+    const campaignContacts = await db
+      .select()
+      .from(campaignContacts)
+      .where(eq(campaignContacts.campaignId, id));
+      
+    // Total contacts for this campaign
+    const totalContacts = campaignContacts.length;
+    
+    // Get contacts that have been scheduled for processing
+    const scheduledContacts = await db
+      .select()
+      .from(contacts)
+      .innerJoin(campaignContacts, eq(contacts.id, campaignContacts.contactId))
+      .where(
+        and(
+          eq(campaignContacts.campaignId, id),
+          eq(contacts.scheduledForProcessing, true)
+        )
+      );
+    
+    // Find contacts that have been scheduled but not processed
+    const unprocessedContacts = scheduledContacts.filter(
+      contact => !contact.contacts.processedAt && !processedContactIds.has(contact.contacts.id)
+    );
+    
+    // Current contact is the first unprocessed contact
+    const currentContact = unprocessedContacts.length > 0 ? unprocessedContacts[0].contacts : null;
+    
+    // Next contact is the second unprocessed contact
+    const nextContact = unprocessedContacts.length > 1 ? unprocessedContacts[1].contacts : null;
+    
+    // Get the latest processed email to determine last processed time
+    const latestProcessedEmail = campaignEmails.length > 0 
+      ? campaignEmails.sort((a, b) => 
+          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+        )[0]
+      : null;
+      
+    const lastProcessedAt = latestProcessedEmail?.createdAt?.toISOString() || null;
+    
+    // Calculate estimated completion time based on average processing rate
+    let estimatedCompletionTime = null;
+    if (campaignEmails.length > 1 && unprocessedContacts.length > 0) {
+      // Get the first and last email to calculate average processing rate
+      const sortedEmails = [...campaignEmails].sort((a, b) => 
+        new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+      );
+      
+      const firstEmail = sortedEmails[0];
+      const lastEmail = sortedEmails[sortedEmails.length - 1];
+      
+      if (firstEmail?.createdAt && lastEmail?.createdAt) {
+        const timeElapsed = lastEmail.createdAt.getTime() - firstEmail.createdAt.getTime();
+        const emailCount = sortedEmails.length;
+        
+        // milliseconds per email
+        const averageProcessingTime = timeElapsed / emailCount;
+        
+        // Estimate completion time
+        const remainingTime = averageProcessingTime * unprocessedContacts.length;
+        const now = new Date();
+        const estimatedCompletion = new Date(now.getTime() + remainingTime);
+        
+        estimatedCompletionTime = estimatedCompletion.toISOString();
+      }
+    }
+    
+    // Calculate percent complete
+    const processed = processedContactIds.size;
+    const scheduled = scheduledContacts.length;
+    const remaining = unprocessedContacts.length;
+    const percentComplete = totalContacts > 0 
+      ? (processed / totalContacts) * 100 
+      : 0;
+    
+    return {
+      currentContact,
+      nextContact,
+      progress: {
+        total: totalContacts,
+        processed,
+        scheduled,
+        remaining,
+        percentComplete
+      },
+      lastProcessedAt,
+      estimatedCompletionTime
+    };
+  }
+  
   // Contact methods
   async getContacts(page?: number, limit?: number): Promise<{ contacts: Contact[], total: number }> {
     const total = await db.select({ count: count() }).from(contacts);
@@ -2303,6 +2479,75 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return updatedEmail;
+  }
+  
+  private getResponsesByDate(responses: SurveyResponse[]): Record<string, number> {
+    const result: Record<string, number> = {};
+    
+    responses.forEach(response => {
+      if (response.createdAt) {
+        try {
+          // Handle both Date objects and string dates
+          const dateObj = response.createdAt instanceof Date 
+            ? response.createdAt 
+            : new Date(response.createdAt);
+          
+          const date = dateObj.toISOString().split('T')[0];
+          result[date] = (result[date] || 0) + 1;
+        } catch (error) {
+          console.error("Invalid date format:", response.createdAt);
+        }
+      }
+    });
+    
+    return result;
+  }
+  
+  private getQuestionAnalytics(questions: SurveyQuestion[], responses: SurveyResponse[]): any[] {
+    return questions.map(question => this.analyzeQuestion(question, responses));
+  }
+  
+  private analyzeQuestion(question: SurveyQuestion, responses: SurveyResponse[]): any {
+    const relevantResponses = responses.filter(r => {
+      if (!r.answers) return false;
+      // Check if the answers array contains an answer for this question
+      const answers = typeof r.answers === 'string' 
+        ? JSON.parse(r.answers as string) 
+        : r.answers;
+      
+      return Array.isArray(answers) && answers.some(a => a.questionId === question.id);
+    });
+    
+    const totalResponses = relevantResponses.length;
+    let yesCount = 0;
+    let noCount = 0;
+    
+    relevantResponses.forEach(r => {
+      const answers = typeof r.answers === 'string' 
+        ? JSON.parse(r.answers as string) 
+        : r.answers;
+      
+      const answer = Array.isArray(answers) 
+        ? answers.find(a => a.questionId === question.id) 
+        : null;
+      
+      if (answer) {
+        if (answer.answer === true) yesCount++;
+        else if (answer.answer === false) noCount++;
+      }
+    });
+    
+    return {
+      question: question.question,
+      id: question.id,
+      category: question.category,
+      orderIndex: question.orderIndex,
+      totalResponses,
+      yesCount,
+      noCount,
+      yesPercentage: totalResponses > 0 ? Math.round((yesCount / totalResponses) * 100) : 0,
+      noPercentage: totalResponses > 0 ? Math.round((noCount / totalResponses) * 100) : 0
+    };
   }
 }
 
