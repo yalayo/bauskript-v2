@@ -18,7 +18,7 @@ import session from "express-session";
 import createMemoryStore from "memorystore";
 import connectPg from "connect-pg-simple";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, and, isNull, inArray, sql } from "drizzle-orm";
 import { Pool } from '@neondatabase/serverless';
 
 const MemoryStore = createMemoryStore(session);
@@ -29,9 +29,12 @@ export interface IStorage {
   // User methods
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByGoogleId(googleId: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateStripeCustomerId(id: number, customerId: string): Promise<User>;
   updateUserStripeInfo(id: number, info: { customerId: string, subscriptionId: string }): Promise<User>;
+  updateUserGoogleTokens(id: number, tokens: { accessToken: string, refreshToken?: string, expiryDate?: Date }): Promise<User>;
+  saveGoogleUser(userData: { googleId: string, googleEmail: string, googleAccessToken: string, googleRefreshToken: string, googleTokenExpiry: Date, username: string, email: string, fullName?: string }): Promise<User>;
   
   // Project methods
   getProjects(): Promise<Project[]>;
@@ -110,6 +113,10 @@ export interface IStorage {
   createContact(contact: InsertContact): Promise<Contact>;
   updateContact(id: number, contact: Partial<InsertContact>): Promise<Contact>;
   deleteContact(id: number): Promise<void>;
+  getBulkContactsForProcessing(): Promise<Contact[]>;
+  markContactsForProcessing(contactIds: number[]): Promise<void>;
+  getNextContactForProcessing(): Promise<Contact | undefined>;
+  markContactAsProcessed(contactId: number): Promise<void>;
   
   // Email methods
   getEmails(): Promise<Email[]>;
@@ -688,9 +695,14 @@ export class MemStorage implements IStorage {
       ...campaign, 
       id, 
       createdAt: new Date(),
+      updatedAt: null,
       status: campaign.status || null,
       createdBy: campaign.createdBy || null,
-      sentCount: campaign.sentCount || 0
+      scheduledDate: campaign.scheduledDate || null,
+      dailyLimit: campaign.dailyLimit || null,
+      sentCount: 0,
+      openCount: 0,
+      clickCount: 0
     };
     this.emailCampaigns.set(id, newCampaign);
     return newCampaign;
@@ -721,9 +733,9 @@ export class MemStorage implements IStorage {
     );
     
     const sent = emails.filter(email => email.status === 'sent').length;
-    const opened = emails.filter(email => email.opened_at !== null).length;
-    const clicked = emails.filter(email => email.clicked_at !== null).length;
-    const replied = emails.filter(email => email.replied_at !== null).length;
+    const opened = emails.filter(email => email.openedAt !== null).length;
+    const clicked = emails.filter(email => email.clickedAt !== null).length;
+    const replied = emails.filter(email => email.repliedAt !== null).length;
     
     return {
       id: campaign.id,
@@ -807,14 +819,22 @@ export class MemStorage implements IStorage {
     const newContact: Contact = {
       ...contact,
       id,
-      created_at: new Date(),
-      updated_at: null,
+      createdAt: new Date(),
+      updatedAt: null,
+      processedAt: null,
       status: contact.status || 'active',
       source: contact.source || null,
       notes: contact.notes || null,
       company: contact.company || null,
       position: contact.position || null,
-      phone: contact.phone || null
+      phone: contact.phone || null,
+      category: contact.category || null,
+      firstName: contact.firstName || null,
+      lastName: contact.lastName || null,
+      email: contact.email,
+      fromBulkUpload: contact.fromBulkUpload || false,
+      scheduledForProcessing: contact.scheduledForProcessing || false,
+      createdById: contact.createdById || 1 // Default to user ID 1 if not provided
     };
     this.contacts.set(id, newContact);
     return newContact;
@@ -828,7 +848,7 @@ export class MemStorage implements IStorage {
     const updatedContact = { 
       ...existingContact, 
       ...contact,
-      updated_at: new Date()
+      updatedAt: new Date()
     };
     this.contacts.set(id, updatedContact);
     return updatedContact;
@@ -836,6 +856,38 @@ export class MemStorage implements IStorage {
   
   async deleteContact(id: number): Promise<void> {
     this.contacts.delete(id);
+  }
+  
+  async getBulkContactsForProcessing(): Promise<Contact[]> {
+    return Array.from(this.contacts.values()).filter(
+      (contact) => contact.fromBulkUpload && !contact.scheduledForProcessing && contact.status === "active"
+    );
+  }
+  
+  async markContactsForProcessing(contactIds: number[]): Promise<void> {
+    for (const id of contactIds) {
+      const contact = await this.getContact(id);
+      if (contact) {
+        contact.scheduledForProcessing = true;
+        contact.updatedAt = new Date();
+        this.contacts.set(id, contact);
+      }
+    }
+  }
+  
+  async getNextContactForProcessing(): Promise<Contact | undefined> {
+    return Array.from(this.contacts.values()).find(
+      (contact) => contact.scheduledForProcessing && !contact.processedAt && contact.status === "active"
+    );
+  }
+  
+  async markContactAsProcessed(contactId: number): Promise<void> {
+    const contact = await this.getContact(contactId);
+    if (contact) {
+      contact.processedAt = new Date();
+      contact.updatedAt = new Date();
+      this.contacts.set(contactId, contact);
+    }
   }
   
   // Email methods
@@ -864,16 +916,17 @@ export class MemStorage implements IStorage {
     const newEmail: Email = {
       ...email,
       id,
-      created_at: new Date(),
-      sent_at: null,
-      opened_at: null,
-      clicked_at: null,
-      replied_at: null,
+      createdAt: new Date(),
+      sentAt: null,
+      openedAt: null,
+      clickedAt: null,
+      repliedAt: null,
+      campaignId: email.campaignId || null,
       status: email.status || 'draft',
       direction: email.direction || 'outbound',
-      generated_by_ai: email.generated_by_ai || false,
-      reviewed_by_id: email.reviewed_by_id || null,
-      ai_prompt: email.ai_prompt || null
+      generatedByAI: email.generatedByAI || false,
+      reviewedById: email.reviewedById || null,
+      aiPrompt: email.aiPrompt || null
     };
     this.emails.set(id, newEmail);
     return newEmail;
@@ -897,7 +950,7 @@ export class MemStorage implements IStorage {
     const updatedEmail = { 
       ...email, 
       status: 'sent',
-      sent_at: new Date()
+      sentAt: new Date()
     };
     this.emails.set(id, updatedEmail);
     return updatedEmail;
@@ -910,7 +963,7 @@ export class MemStorage implements IStorage {
     }
     const updatedEmail = { 
       ...email, 
-      opened_at: new Date()
+      openedAt: new Date()
     };
     this.emails.set(id, updatedEmail);
     
@@ -936,7 +989,7 @@ export class MemStorage implements IStorage {
     }
     const updatedEmail = { 
       ...email, 
-      clicked_at: new Date()
+      clickedAt: new Date()
     };
     this.emails.set(id, updatedEmail);
     
@@ -962,7 +1015,7 @@ export class MemStorage implements IStorage {
     }
     const updatedEmail = { 
       ...email, 
-      replied_at: new Date()
+      repliedAt: new Date()
     };
     this.emails.set(id, updatedEmail);
     return updatedEmail;
@@ -978,14 +1031,14 @@ export class MemStorage implements IStorage {
     // For now, we'll just create a placeholder email
     
     const newEmail: InsertEmail = {
-      contact_id: contactId,
+      contactId: contactId,
       campaignId: null,
-      subject: `Hello ${contact.first_name}`,
-      content: `Dear ${contact.first_name},\n\nThis is a placeholder for AI-generated content based on the prompt: ${promptTemplate}\n\nBest regards,\nThe Team`,
+      subject: `Hello ${contact.firstName}`,
+      content: `Dear ${contact.firstName},\n\nThis is a placeholder for AI-generated content based on the prompt: ${promptTemplate}\n\nBest regards,\nThe Team`,
       status: 'draft',
       direction: 'outbound',
-      generated_by_ai: true,
-      ai_prompt: promptTemplate
+      generatedByAI: true,
+      aiPrompt: promptTemplate
     };
     
     return this.createEmail(newEmail);
@@ -1000,7 +1053,7 @@ export class MemStorage implements IStorage {
     const updatedEmail = { 
       ...email, 
       status: 'approved',
-      reviewed_by_id: reviewerId,
+      reviewedById: reviewerId,
       content: content || email.content
     };
     
@@ -1414,9 +1467,9 @@ export class DatabaseStorage implements IStorage {
       .where(eq(emails.campaignId, id));
     
     const sent = emailList.filter(email => email.status === 'sent').length;
-    const opened = emailList.filter(email => email.opened_at !== null).length;
-    const clicked = emailList.filter(email => email.clicked_at !== null).length;
-    const replied = emailList.filter(email => email.replied_at !== null).length;
+    const opened = emailList.filter(email => email.openedAt !== null).length;
+    const clicked = emailList.filter(email => email.clickedAt !== null).length;
+    const replied = emailList.filter(email => email.repliedAt !== null).length;
     
     return {
       id: campaign.id,
@@ -1517,7 +1570,7 @@ export class DatabaseStorage implements IStorage {
       .update(contacts)
       .set({
         ...contact,
-        updated_at: new Date()
+        updatedAt: new Date()
       })
       .where(eq(contacts.id, id))
       .returning();
@@ -1533,6 +1586,57 @@ export class DatabaseStorage implements IStorage {
     await db.delete(contacts).where(eq(contacts.id, id));
   }
   
+  async getBulkContactsForProcessing(): Promise<Contact[]> {
+    // Get contacts that were uploaded in bulk and not yet scheduled for processing
+    return await db.select()
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.fromBulkUpload, true),
+          eq(contacts.scheduledForProcessing, false),
+          eq(contacts.status, "active")
+        )
+      );
+  }
+  
+  async markContactsForProcessing(contactIds: number[]): Promise<void> {
+    if (contactIds.length === 0) return;
+    
+    // Update all contacts in the array to mark them as scheduled for processing
+    await db.update(contacts)
+      .set({
+        scheduledForProcessing: true,
+        updatedAt: new Date()
+      })
+      .where(inArray(contacts.id, contactIds));
+  }
+  
+  async getNextContactForProcessing(): Promise<Contact | undefined> {
+    // Get the next contact that is scheduled for processing but not yet processed
+    const [contact] = await db.select()
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.scheduledForProcessing, true),
+          isNull(contacts.processedAt),
+          eq(contacts.status, "active")
+        )
+      )
+      .limit(1);
+    
+    return contact;
+  }
+  
+  async markContactAsProcessed(contactId: number): Promise<void> {
+    // Mark a contact as processed (after email has been sent)
+    await db.update(contacts)
+      .set({
+        processedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(contacts.id, contactId));
+  }
+  
   // Email methods
   async getEmails(): Promise<Email[]> {
     return await db.select().from(emails);
@@ -1542,7 +1646,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(emails)
-      .where(eq(emails.contact_id, contactId));
+      .where(eq(emails.contactId, contactId));
   }
   
   async getEmailsByCampaign(campaignId: number): Promise<Email[]> {
@@ -1581,7 +1685,7 @@ export class DatabaseStorage implements IStorage {
       .update(emails)
       .set({
         status: 'sent',
-        sent_at: new Date()
+        sentAt: new Date()
       })
       .where(eq(emails.id, id))
       .returning();
@@ -1602,7 +1706,7 @@ export class DatabaseStorage implements IStorage {
     const [updatedEmail] = await db
       .update(emails)
       .set({
-        opened_at: new Date()
+        openedAt: new Date()
       })
       .where(eq(emails.id, id))
       .returning();
@@ -1629,7 +1733,7 @@ export class DatabaseStorage implements IStorage {
     const [updatedEmail] = await db
       .update(emails)
       .set({
-        clicked_at: new Date()
+        clickedAt: new Date()
       })
       .where(eq(emails.id, id))
       .returning();
@@ -1651,7 +1755,7 @@ export class DatabaseStorage implements IStorage {
     const [updatedEmail] = await db
       .update(emails)
       .set({
-        replied_at: new Date()
+        repliedAt: new Date()
       })
       .where(eq(emails.id, id))
       .returning();

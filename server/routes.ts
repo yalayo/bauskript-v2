@@ -2,6 +2,10 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
+import multer from "multer";
+import path from "path";
+import { read, utils } from "xlsx";
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 import { 
   insertProjectSchema, 
   insertDailyReportSchema, 
@@ -758,6 +762,190 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = parseInt(req.params.id);
       await storage.deleteContact(id);
       res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Configure multer for file uploads
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+    fileFilter: (req, file, cb) => {
+      // Accept only Excel files
+      const filetypes = /xlsx|xls/;
+      const mimetype = filetypes.test(file.mimetype);
+      const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+      
+      if (mimetype && extname) {
+        return cb(null, true);
+      }
+      cb(new Error("Only Excel files are allowed"));
+    },
+  });
+
+  // Excel contacts upload route
+  app.post("/api/contacts/upload", upload.single("file"), async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (req.user?.role !== "admin") return res.sendStatus(403);
+    
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+      
+      // Parse Excel file
+      const workbook = read(req.file.buffer);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const data = utils.sheet_to_json(sheet, { header: 1 });
+      
+      // Process rows (skip header row if it exists)
+      const startRow = data[0][0] === "A" || data[0][0] === "Email" ? 1 : 0;
+      const importedContacts = [];
+      const errors = [];
+      
+      for (let i = startRow; i < data.length; i++) {
+        const row = data[i];
+        if (!row[1] || typeof row[1] !== 'string') continue; // Skip if no email
+        
+        try {
+          const contactData = {
+            email: row[1].toString().trim(),
+            category: row[2] ? row[2].toString().trim() : null,
+            firstName: null,
+            lastName: null,
+            company: null,
+            position: null,
+            phone: null,
+            status: "active",
+            source: "excel-import",
+            notes: null,
+            fromBulkUpload: true,
+            scheduledForProcessing: false,
+            createdById: req.user?.id
+          };
+          
+          const contact = await storage.createContact(contactData);
+          importedContacts.push(contact);
+        } catch (error) {
+          // Skip duplicates (unique constraint on email)
+          errors.push({ row: i + 1, email: row[1], error: error.message });
+        }
+      }
+      
+      res.status(201).json({ 
+        message: `Imported ${importedContacts.length} contacts`,
+        imported: importedContacts.length,
+        errors: errors,
+        contacts: importedContacts
+      });
+    } catch (error) {
+      console.error("Excel import error:", error);
+      next(error);
+    }
+  });
+
+  // Email processor route - marks contacts as scheduled for sending
+  app.post("/api/contacts/schedule-processing", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (req.user?.role !== "admin") return res.sendStatus(403);
+    
+    try {
+      const { campaignId } = req.body;
+      
+      if (!campaignId) {
+        return res.status(400).json({ message: "Campaign ID is required" });
+      }
+      
+      // Get campaign to check if it exists
+      const campaign = await storage.getEmailCampaign(parseInt(campaignId));
+      if (!campaign) {
+        return res.status(404).json({ message: "Campaign not found" });
+      }
+      
+      // Get contacts that are from bulk upload and not yet scheduled
+      const contacts = await storage.getBulkContactsForProcessing();
+      
+      // Mark them as scheduled
+      if (contacts.length > 0) {
+        await storage.markContactsForProcessing(contacts.map(c => c.id));
+        
+        res.json({ 
+          message: `Scheduled ${contacts.length} contacts for processing`,
+          scheduledCount: contacts.length,
+          contacts: contacts
+        });
+      } else {
+        res.json({ 
+          message: "No contacts available for scheduling",
+          scheduledCount: 0,
+          contacts: []
+        });
+      }
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Email processing endpoint - sends one email every time it's called
+  app.post("/api/process-email", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (req.user?.role !== "admin") return res.sendStatus(403);
+    
+    try {
+      const { campaignId } = req.body;
+      
+      if (!campaignId) {
+        return res.status(400).json({ message: "Campaign ID is required" });
+      }
+      
+      // Get campaign
+      const campaign = await storage.getEmailCampaign(parseInt(campaignId));
+      if (!campaign) {
+        return res.status(404).json({ message: "Campaign not found" });
+      }
+      
+      // Get next contact scheduled for processing
+      const contact = await storage.getNextContactForProcessing();
+      
+      if (!contact) {
+        return res.json({ 
+          status: "complete",
+          message: "All scheduled contacts have been processed" 
+        });
+      }
+      
+      // Generate and send email using existing AI functionality
+      let emailContent = campaign.content;
+      
+      // Replace placeholders with contact data
+      emailContent = emailContent.replace(/{firstName}/g, contact.firstName || "")
+                              .replace(/{lastName}/g, contact.lastName || "")
+                              .replace(/{company}/g, contact.company || "")
+                              .replace(/{position}/g, contact.position || "")
+                              .replace(/{category}/g, contact.category || "");
+      
+      // Create email record
+      const email = await storage.createEmail({
+        contactId: contact.id,
+        campaignId: parseInt(campaignId),
+        subject: campaign.subject,
+        content: emailContent,
+        status: "sent",
+        sentAt: new Date(),
+        direction: "outbound",
+        generatedByAI: false,
+      });
+      
+      // Mark contact as processed
+      await storage.markContactAsProcessed(contact.id);
+      
+      res.json({ 
+        status: "sent",
+        contact: contact,
+        email: email,
+        message: `Email sent to ${contact.email}` 
+      });
     } catch (error) {
       next(error);
     }

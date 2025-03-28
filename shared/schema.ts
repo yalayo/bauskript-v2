@@ -12,6 +12,11 @@ export const users = pgTable("users", {
   role: text("role").default("user"),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
+  googleId: text("google_id"),
+  googleAccessToken: text("google_access_token"),
+  googleRefreshToken: text("google_refresh_token"),
+  googleTokenExpiry: timestamp("google_token_expiry"),
+  googleEmail: text("google_email"),
 });
 
 export const projects = pgTable("projects", {
@@ -130,6 +135,10 @@ export const contacts = pgTable("contacts", {
   status: text("status").default("active"), // active, unsubscribed, bounced
   source: text("source"), // where the contact came from
   notes: text("notes"),
+  category: text("category"), // e.g., ARQUITECTURA, INGENIERIA, etc.
+  fromBulkUpload: boolean("from_bulk_upload").default(false),
+  scheduledForProcessing: boolean("scheduled_for_processing").default(false),
+  processedAt: timestamp("processed_at"),
   createdById: integer("created_by_id")
     .notNull()
     .references(() => users.id),
@@ -194,6 +203,11 @@ export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
   fullName: true,
   role: true,
+  googleId: true,
+  googleAccessToken: true,
+  googleRefreshToken: true,
+  googleTokenExpiry: true,
+  googleEmail: true,
 });
 
 export const insertProjectSchema = createInsertSchema(projects).pick({
@@ -286,6 +300,9 @@ export const insertContactSchema = createInsertSchema(contacts).pick({
   status: true,
   source: true,
   notes: true,
+  category: true,
+  fromBulkUpload: true,
+  scheduledForProcessing: true,
   createdById: true,
 });
 
