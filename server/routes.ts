@@ -1969,6 +1969,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   }
 
+  // Survey Questions API
+  app.get("/api/survey-questions", async (req, res, next) => {
+    try {
+      // Get active survey questions ordered by orderIndex
+      const questions = await storage.getSurveyQuestions();
+      res.json(questions);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get single survey question
+  app.get("/api/survey-questions/:id", async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const question = await storage.getSurveyQuestion(id);
+      
+      if (!question) {
+        return res.status(404).json({ message: "Survey question not found" });
+      }
+      
+      res.json(question);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Create/update survey questions (admin only)
+  app.post("/api/survey-questions", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (req.user?.role !== "admin") return res.sendStatus(403);
+    
+    try {
+      const questionData = insertSurveyQuestionSchema.parse(req.body);
+      const question = await storage.createSurveyQuestion(questionData);
+      res.status(201).json(question);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Submit survey response (public endpoint)
+  app.post("/api/survey-responses", async (req, res, next) => {
+    try {
+      // Validate the request body
+      const responseData = insertSurveyResponseSchema.parse(req.body);
+      
+      // Create the survey response
+      const response = await storage.createSurveyResponse(responseData);
+      
+      res.status(201).json({ 
+        success: true, 
+        message: "Survey response submitted successfully",
+        id: response.id
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get survey analytics (admin only)
+  app.get("/api/survey-analytics", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (req.user?.role !== "admin") return res.sendStatus(403);
+    
+    try {
+      // Get all survey responses
+      const responses = await storage.getSurveyResponses();
+      
+      // Get all survey questions
+      const questions = await storage.getSurveyQuestions();
+      
+      // Calculate analytics
+      const analytics = {
+        totalResponses: responses.length,
+        questions: questions.map(question => {
+          // Count yes/no answers for each question
+          const yesCount = responses.reduce((count, response) => {
+            const answer = response.answers.find((a: any) => a.questionId === question.id);
+            return count + (answer && answer.answer === true ? 1 : 0);
+          }, 0);
+          
+          const noCount = responses.reduce((count, response) => {
+            const answer = response.answers.find((a: any) => a.questionId === question.id);
+            return count + (answer && answer.answer === false ? 1 : 0);
+          }, 0);
+          
+          return {
+            id: question.id,
+            question: question.question,
+            category: question.category,
+            yesCount,
+            noCount,
+            yesPercentage: responses.length ? Math.round((yesCount / responses.length) * 100) : 0,
+            noPercentage: responses.length ? Math.round((noCount / responses.length) * 100) : 0,
+          };
+        }),
+        // Get the most recent responses
+        recentResponses: responses.slice(0, 10).map(response => ({
+          id: response.id,
+          email: response.email,
+          name: response.name,
+          company: response.company,
+          createdAt: response.createdAt,
+        })),
+      };
+      
+      res.json(analytics);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   const httpServer = createServer(app);
   
   // Initialize email processing for all running campaigns

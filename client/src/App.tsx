@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -25,30 +25,38 @@ import QuestionnairePage from "@/pages/questionnaire";
 import SurveyAnalyticsPage from "@/pages/survey-analytics";
 import LandingPage from "@/pages/landing-page";
 
-function Router() {
-  return (
+function AppRouter() {
+  const [location] = useLocation();
+  const isAppRoute = location.startsWith("/app") || location === "/auth";
+  
+  // Use Layout only for app routes
+  return isAppRoute ? (
     <Layout>
       <Switch>
-        <ProtectedRoute path="/" component={Dashboard} />
+        <ProtectedRoute path="/app" component={Dashboard} />
+        <ProtectedRoute path="/app/diary" component={DiaryPage} />
+        <ProtectedRoute path="/app/diary/:id" component={ReportDetailPage} />
+        <ProtectedRoute path="/app/attendance" component={AttendancePage} />
+        <ProtectedRoute path="/app/photos" component={PhotoGalleryPage} />
+        <ProtectedRoute path="/app/issues" component={IssuesPage} />
+        <ProtectedRoute path="/app/email-campaigns" component={EmailCampaignsPage} />
+        <ProtectedRoute path="/app/campaign-detail/:id" component={CampaignDetailPage} />
+        <ProtectedRoute path="/app/gmail-auth" component={GmailAuthPage} />
+        <ProtectedRoute path="/app/blog" component={BlogPage} />
+        <ProtectedRoute path="/app/settings" component={SettingsPage} />
+        <ProtectedRoute path="/app/survey-analytics" component={SurveyAnalyticsPage} />
         <Route path="/auth" component={AuthPage} />
-        <ProtectedRoute path="/diary" component={DiaryPage} />
-        <ProtectedRoute path="/diary/:id" component={ReportDetailPage} />
-        <ProtectedRoute path="/attendance" component={AttendancePage} />
-        <ProtectedRoute path="/photos" component={PhotoGalleryPage} />
-        <ProtectedRoute path="/issues" component={IssuesPage} />
-        <ProtectedRoute path="/email-campaigns" component={EmailCampaignsPage} />
-        <ProtectedRoute path="/campaign-detail/:id" component={CampaignDetailPage} />
-        <ProtectedRoute path="/gmail-auth" component={GmailAuthPage} />
-        <ProtectedRoute path="/blog" component={BlogPage} />
-        <ProtectedRoute path="/settings" component={SettingsPage} />
-        <ProtectedRoute path="/survey-analytics" component={SurveyAnalyticsPage} />
-        <Route path="/checkout" component={CheckoutPage} />
-        <Route path="/subscribe" component={SubscribePage} />
-        <Route path="/questionnaire" component={QuestionnairePage} />
-        <Route path="/landing" component={LandingPage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
+  ) : (
+    <Switch>
+      <Route path="/" component={LandingPage} />
+      <Route path="/checkout" component={CheckoutPage} />
+      <Route path="/subscribe" component={SubscribePage} />
+      <Route path="/questionnaire" component={QuestionnairePage} />
+      <Route component={NotFound} />
+    </Switch>
   );
 }
 
@@ -56,7 +64,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Router />
+        <AppRouter />
         <Toaster />
       </AuthProvider>
     </QueryClientProvider>

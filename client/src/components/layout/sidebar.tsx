@@ -47,24 +47,24 @@ export const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
             Main
           </div>
           <a
-            href="/"
+            href="/app"
             onClick={(e) => {
-              if (location === "/") {
+              if (location === "/app") {
                 e.preventDefault();
                 if (window.innerWidth < 1024) {
                   toggleSidebar();
                 }
               }
             }}
-            className={`sidebar-link ${location === "/" ? "active" : ""}`}
+            className={`sidebar-link ${location === "/app" ? "active" : ""}`}
           >
             <i className="fas fa-tachometer-alt"></i>
             <span>Dashboard</span>
           </a>
           <a
-            href="/diary"
+            href="/app/diary"
             onClick={(e) => {
-              if (location === "/diary") {
+              if (location === "/app/diary") {
                 e.preventDefault();
                 if (window.innerWidth < 1024) {
                   toggleSidebar();
@@ -72,16 +72,16 @@ export const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
               }
             }}
             className={`sidebar-link ${
-              location === "/diary" ? "active" : ""
+              location === "/app/diary" ? "active" : ""
             }`}
           >
             <i className="fas fa-book"></i>
             <span>Construction Diary</span>
           </a>
           <a
-            href="/attendance"
+            href="/app/attendance"
             onClick={(e) => {
-              if (location === "/attendance") {
+              if (location === "/app/attendance") {
                 e.preventDefault();
                 if (window.innerWidth < 1024) {
                   toggleSidebar();
@@ -89,16 +89,16 @@ export const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
               }
             }}
             className={`sidebar-link ${
-              location === "/attendance" ? "active" : ""
+              location === "/app/attendance" ? "active" : ""
             }`}
           >
             <i className="fas fa-user-hard-hat"></i>
             <span>Attendance</span>
           </a>
           <a
-            href="/photos"
+            href="/app/photos"
             onClick={(e) => {
-              if (location === "/photos") {
+              if (location === "/app/photos") {
                 e.preventDefault();
                 if (window.innerWidth < 1024) {
                   toggleSidebar();
@@ -106,16 +106,16 @@ export const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
               }
             }}
             className={`sidebar-link ${
-              location === "/photos" ? "active" : ""
+              location === "/app/photos" ? "active" : ""
             }`}
           >
             <i className="fas fa-images"></i>
             <span>Site Photos</span>
           </a>
           <a
-            href="/issues"
+            href="/app/issues"
             onClick={(e) => {
-              if (location === "/issues") {
+              if (location === "/app/issues") {
                 e.preventDefault();
                 if (window.innerWidth < 1024) {
                   toggleSidebar();
@@ -123,7 +123,7 @@ export const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
               }
             }}
             className={`sidebar-link ${
-              location === "/issues" ? "active" : ""
+              location === "/app/issues" ? "active" : ""
             }`}
           >
             <i className="fas fa-exclamation-triangle"></i>
@@ -134,9 +134,9 @@ export const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
             Marketing
           </div>
           <a
-            href="/email-campaigns"
+            href="/app/email-campaigns"
             onClick={(e) => {
-              if (location === "/email-campaigns") {
+              if (location === "/app/email-campaigns") {
                 e.preventDefault();
                 if (window.innerWidth < 1024) {
                   toggleSidebar();
@@ -144,16 +144,16 @@ export const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
               }
             }}
             className={`sidebar-link ${
-              location === "/email-campaigns" ? "active" : ""
+              location === "/app/email-campaigns" ? "active" : ""
             }`}
           >
             <i className="fas fa-envelope"></i>
             <span>Email Campaigns</span>
           </a>
           <a
-            href="/gmail-auth"
+            href="/app/gmail-auth"
             onClick={(e) => {
-              if (location === "/gmail-auth") {
+              if (location === "/app/gmail-auth") {
                 e.preventDefault();
                 if (window.innerWidth < 1024) {
                   toggleSidebar();
@@ -161,39 +161,39 @@ export const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
               }
             }}
             className={`sidebar-link ${
-              location === "/gmail-auth" ? "active" : ""
+              location === "/app/gmail-auth" ? "active" : ""
             }`}
           >
             <i className="fab fa-google"></i>
             <span>Gmail Connection</span>
           </a>
           <a
-            href="/blog"
+            href="/app/blog"
             onClick={(e) => {
-              if (location === "/blog") {
+              if (location === "/app/blog") {
                 e.preventDefault();
                 if (window.innerWidth < 1024) {
                   toggleSidebar();
                 }
               }
             }}
-            className={`sidebar-link ${location === "/blog" ? "active" : ""}`}
+            className={`sidebar-link ${location === "/app/blog" ? "active" : ""}`}
           >
             <i className="fas fa-newspaper"></i>
             <span>Blog</span>
           </a>
           {user?.role === "admin" && (
             <a
-              href="/survey-analytics"
+              href="/app/survey-analytics"
               onClick={(e) => {
-                if (location === "/survey-analytics") {
+                if (location === "/app/survey-analytics") {
                   e.preventDefault();
                   if (window.innerWidth < 1024) {
                     toggleSidebar();
                   }
                 }
               }}
-              className={`sidebar-link ${location === "/survey-analytics" ? "active" : ""}`}
+              className={`sidebar-link ${location === "/app/survey-analytics" ? "active" : ""}`}
             >
               <i className="fas fa-chart-pie"></i>
               <span>Survey Analytics</span>
@@ -204,9 +204,9 @@ export const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
             Settings
           </div>
           <a
-            href="/settings"
+            href="/app/settings"
             onClick={(e) => {
-              if (location === "/settings") {
+              if (location === "/app/settings") {
                 e.preventDefault();
                 if (window.innerWidth < 1024) {
                   toggleSidebar();
@@ -214,7 +214,7 @@ export const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
               }
             }}
             className={`sidebar-link ${
-              location === "/settings" ? "active" : ""
+              location === "/app/settings" ? "active" : ""
             }`}
           >
             <i className="fas fa-cog"></i>
