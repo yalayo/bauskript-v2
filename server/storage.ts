@@ -973,6 +973,11 @@ export class MemStorage implements IStorage {
     const campaignEmails = Array.from(this.emails.values())
       .filter(email => email.campaignId === id && (email.status === 'sent' || email.status === 'failed'));
       
+    // Get all contacts that were used in this campaign
+    const contactIds = new Set(campaignEmails.map(email => email.contactId));
+    console.log(`Replaying campaign ${id} with ${contactIds.size} contacts`);
+    
+    // Reset emails
     for (const email of campaignEmails) {
       const resetEmail = {
         ...email,
@@ -983,6 +988,18 @@ export class MemStorage implements IStorage {
         repliedAt: null
       };
       this.emails.set(email.id, resetEmail);
+    }
+    
+    // Reset all contacts for processing
+    for (const contactId of contactIds) {
+      const contact = await this.getContact(contactId);
+      if (contact) {
+        contact.scheduledForProcessing = true;
+        contact.processedAt = null;
+        contact.updatedAt = new Date();
+        this.contacts.set(contactId, contact);
+        console.log(`Reset contact ${contactId} (${contact.email}) for processing`);
+      }
     }
     
     // Update the campaign status to running with fresh stats
@@ -996,10 +1013,12 @@ export class MemStorage implements IStorage {
       sentCount: 0,
       openCount: 0,
       clickCount: 0,
-      replyCount: 0
+      replyCount: 0,
+      statusMessage: 'Campaign restarted'
     };
     
     this.emailCampaigns.set(id, updatedCampaign);
+    console.log(`Campaign ${id} reset and set to running status`);
     return updatedCampaign;
   }
   
@@ -1023,15 +1042,18 @@ export class MemStorage implements IStorage {
       return 0;
     }
     
-    // For each contact, create an email in this campaign
+    console.log(`Assigning ${contactsToAssign.length} contacts to campaign ${campaignId}`);
+    
+    // For each contact, create an email in this campaign and mark as scheduled for processing
     for (const contact of contactsToAssign) {
+      // Create the email placeholder
       const id = this.emailCurrentId++;
       const email: Email = {
         id,
         contactId: contact.id,
         campaignId,
-        subject: `Email for ${contact.email}`,
-        content: `This is a pending email for the campaign.`,
+        subject: campaign.subject || `Email for ${contact.email}`,
+        content: campaign.content || `This is a pending email for the campaign.`,
         status: 'pending', 
         createdAt: new Date(),
         sentAt: null,
@@ -1044,6 +1066,14 @@ export class MemStorage implements IStorage {
         aiPrompt: null
       };
       this.emails.set(id, email);
+      
+      // Mark contact as scheduled for processing
+      contact.scheduledForProcessing = true;
+      contact.processedAt = null;
+      contact.updatedAt = new Date();
+      this.contacts.set(contact.id, contact);
+      
+      console.log(`Contact ${contact.id} (${contact.email}) scheduled for processing in campaign ${campaignId}`);
     }
     
     return contactsToAssign.length;
@@ -1066,32 +1096,48 @@ export class MemStorage implements IStorage {
     const campaignEmails = Array.from(this.emails.values())
       .filter(email => email.campaignId === id);
     
-    // Get all processed contact IDs
-    const processedContactIds = new Set(
-      campaignEmails.map(email => email.contactId)
-    );
+    // Find all contact IDs that should be in this campaign
+    const campaignContactIds = new Set(campaignEmails.map(email => email.contactId));
     
-    // Get all contacts that have been scheduled
-    const scheduledContacts = Array.from(this.contacts.values())
-      .filter(contact => contact.scheduledForProcessing === true);
+    // Get all processed contact IDs (those with 'sent' status)
+    const processedEmails = campaignEmails.filter(email => email.status === 'sent');
+    const processedContactIds = new Set(processedEmails.map(email => email.contactId));
     
-    // Find current contact in process (scheduled but not processed)
-    const currentContact = scheduledContacts.find(
+    // Get all contacts that belong to this campaign and are scheduled for processing
+    const campaignContacts = Array.from(this.contacts.values())
+      .filter(contact => 
+        campaignContactIds.has(contact.id) && 
+        contact.scheduledForProcessing === true
+      );
+    
+    // Find current contact being processed (scheduled but not yet processed)
+    const currentContact = campaignContacts.find(
       contact => !contact.processedAt && !processedContactIds.has(contact.id)
     ) || null;
     
     // Find next contact to process (after current)
-    const remainingContacts = scheduledContacts
-      .filter(contact => !contact.processedAt && !processedContactIds.has(contact.id) && contact !== currentContact);
+    const remainingContacts = campaignContacts
+      .filter(
+        contact => 
+          !contact.processedAt && 
+          !processedContactIds.has(contact.id) && 
+          contact.id !== (currentContact?.id || -1)
+      );
     
     const nextContact = remainingContacts.length > 0 ? remainingContacts[0] : null;
+    
+    console.log(`Campaign ${id} processing info: ${campaignContacts.length} campaign contacts, ${processedContactIds.size} processed contacts, ${remainingContacts.length} remaining contacts`);
+    
+    if (currentContact) {
+      console.log(`Current contact for campaign ${id}: ${currentContact.id} (${currentContact.email})`);
+    }
     
     return {
       campaignId: id,
       currentContact,
       nextContact,
       totalProcessed: processedContactIds.size,
-      totalScheduled: scheduledContacts.length,
+      totalScheduled: campaignContacts.length,
       remainingContacts: remainingContacts.length + (currentContact ? 1 : 0)
     };
   }
