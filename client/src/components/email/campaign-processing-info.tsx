@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -10,7 +9,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, MailCheck, Clock, User, Building2, Mail, Phone, TimerReset } from "lucide-react";
+import { Loader2, User, Building2, Mail, Phone } from "lucide-react";
 
 interface CampaignProcessingInfoProps {
   campaignId: number;
@@ -25,17 +24,12 @@ interface ProcessingInfoContact {
 }
 
 interface ProcessingInfo {
+  campaignId: number;
   currentContact: ProcessingInfoContact | null;
   nextContact: ProcessingInfoContact | null;
-  progress: {
-    total: number;
-    processed: number;
-    scheduled: number;
-    remaining: number;
-    percentComplete: number;
-  };
-  lastProcessedAt: string | null;
-  estimatedCompletionTime: string | null;
+  totalProcessed: number;
+  totalScheduled: number;
+  remainingContacts: number;
 }
 
 export default function CampaignProcessingInfo({ campaignId }: CampaignProcessingInfoProps) {
@@ -55,29 +49,7 @@ export default function CampaignProcessingInfo({ campaignId }: CampaignProcessin
     refetchInterval: pollingInterval,
   });
 
-  // Format time remaining
-  const formatTimeRemaining = (estimatedTime: string | null) => {
-    if (!estimatedTime) return 'Unknown';
-    
-    const estimatedDate = new Date(estimatedTime);
-    const now = new Date();
-    
-    // Get time difference in milliseconds
-    const diff = estimatedDate.getTime() - now.getTime();
-    
-    if (diff <= 0) return 'Any moment now';
-    
-    // Convert to appropriate time unit
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-    
-    if (days > 0) return `${days} day${days > 1 ? 's' : ''}`;
-    if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''}`;
-    if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''}`;
-    return `${seconds} second${seconds !== 1 ? 's' : ''}`;
-  };
+  // Simplified component without the time estimation logic which is no longer provided by the backend
   
   if (isLoading) {
     return (
@@ -109,13 +81,17 @@ export default function CampaignProcessingInfo({ campaignId }: CampaignProcessin
     );
   }
   
+  // Calculate derived values that were previously returned from the server
+  const total = data.totalProcessed + data.remainingContacts;
+  const percentComplete = total > 0 ? Math.round((data.totalProcessed / total) * 100) : 0;
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Campaign Progress</CardTitle>
           <CardDescription>
-            {data.progress.percentComplete === 100 
+            {percentComplete === 100 
               ? 'All emails have been processed'
               : 'Emails being processed in sequence'}
           </CardDescription>
@@ -124,43 +100,25 @@ export default function CampaignProcessingInfo({ campaignId }: CampaignProcessin
           <div>
             <div className="flex justify-between mb-2">
               <span className="text-sm text-muted-foreground">Progress</span>
-              <span className="text-sm font-medium">{Math.round(data.progress.percentComplete)}%</span>
+              <span className="text-sm font-medium">{percentComplete}%</span>
             </div>
-            <Progress value={data.progress.percentComplete} className="h-2" />
+            <Progress value={percentComplete} className="h-2" />
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
               <div>
                 <p className="text-xs text-muted-foreground">Total</p>
-                <p className="text-lg font-bold">{data.progress.total}</p>
+                <p className="text-lg font-bold">{total}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Processed</p>
-                <p className="text-lg font-bold">{data.progress.processed}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Scheduled</p>
-                <p className="text-lg font-bold">{data.progress.scheduled}</p>
+                <p className="text-lg font-bold">{data.totalProcessed}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Remaining</p>
-                <p className="text-lg font-bold">{data.progress.remaining}</p>
+                <p className="text-lg font-bold">{data.remainingContacts}</p>
               </div>
             </div>
           </div>
-          
-          {data.estimatedCompletionTime && (
-            <div className="flex items-center text-sm">
-              <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span>Estimated time to completion: {formatTimeRemaining(data.estimatedCompletionTime)}</span>
-            </div>
-          )}
-          
-          {data.lastProcessedAt && (
-            <div className="flex items-center text-sm">
-              <TimerReset className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span>Last processed: {new Date(data.lastProcessedAt).toLocaleString()}</span>
-            </div>
-          )}
         </CardContent>
       </Card>
           
@@ -245,7 +203,7 @@ export default function CampaignProcessingInfo({ campaignId }: CampaignProcessin
               </div>
             ) : (
               <div className="text-center py-4 text-muted-foreground">
-                {data.progress.percentComplete === 100 
+                {percentComplete === 100 
                   ? 'All contacts have been processed' 
                   : 'No contact in the queue'}
               </div>
