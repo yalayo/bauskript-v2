@@ -33,15 +33,16 @@ export default function ContactsCampaignAssign({ campaignId, onSuccess }: Contac
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Fetch all contacts
+  // Fetch all contacts with a large limit to ensure we get all
   const { 
     data: contactsData, 
     isLoading: contactsLoading,
     refetch: refetchContacts
   } = useQuery({
-    queryKey: ['/api/contacts'],
+    queryKey: ['/api/contacts', 'all'],
     queryFn: async () => {
-      const res = await fetch('/api/contacts');
+      // Request a large number of contacts (e.g., 1000) to ensure we get all
+      const res = await fetch('/api/contacts?limit=1000');
       if (!res.ok) {
         throw new Error('Failed to fetch contacts');
       }
@@ -106,8 +107,10 @@ export default function ContactsCampaignAssign({ campaignId, onSuccess }: Contac
       queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns', campaignId, 'stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns', campaignId, 'processing-info'] });
       queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns', campaignId, 'contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/contacts', 'all'] });
       
       // Refresh data
+      refetchContacts();
       refetchCampaignContacts();
       
       if (onSuccess) {
@@ -182,7 +185,14 @@ export default function ContactsCampaignAssign({ campaignId, onSuccess }: Contac
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle>Assign Contacts</CardTitle>
-          <CardDescription>Select contacts to add to this campaign</CardDescription>
+          <CardDescription>
+            Select contacts to add to this campaign
+            {contactsData?.total > 0 && (
+              <span className="block mt-1 text-xs">
+                {availableContacts.length} of {contactsData.total} total contacts available to assign
+              </span>
+            )}
+          </CardDescription>
         </div>
         <Button variant="outline" size="icon" onClick={handleRefresh} title="Refresh contacts list">
           <RefreshCw className="h-4 w-4" />
