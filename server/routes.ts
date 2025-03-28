@@ -921,14 +921,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       fileSize: 20 * 1024 * 1024, // 20MB limit
     },
     fileFilter: (req, file, cb) => {
-      // Accept only Excel files
-      const filetypes = /xlsx|xls/;
-      const mimetype = filetypes.test(file.mimetype);
-      const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+      // Check and accept common Excel MIME types
+      const acceptableMimeTypes = [
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/octet-stream',
+        'application/x-zip-compressed',
+        'application/zip'
+      ];
       
-      if (mimetype && extname) {
+      // Accept Excel file extensions
+      const fileExtension = path.extname(file.originalname).toLowerCase();
+      const validExtension = /\.(xlsx|xls)$/.test(fileExtension);
+      
+      if (validExtension) {
         return cb(null, true);
       }
+      
       cb(new Error("Error: File upload only supports Excel files (.xlsx, .xls)"));
     }
   });
@@ -956,27 +965,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Process each row and extract contacts
       const contacts: BulkContact[] = [];
+      console.log("Excel data format:", JSON.stringify(data[0])); // Log first row for debugging
       
       for (const row of data) {
-        // The second column (B) contains the email
-        const email = row["B"] || row[1] || row["email"];
-        
-        if (!email || typeof email !== 'string' || !email.includes('@')) {
-          continue; // Skip invalid emails
+        try {
+          // Using type assertion to work with the row data
+          const typedRow = row as Record<string | number, any>;
+          
+          // Try different ways to extract the email
+          let email = null;
+          
+          // Check common Excel formats
+          if ("B" in typedRow) {
+            email = typedRow["B"];
+          } else if ("Email" in typedRow || "EMAIL" in typedRow || "email" in typedRow) {
+            email = typedRow["Email"] || typedRow["EMAIL"] || typedRow["email"];
+          } else if (1 in typedRow) {
+            email = typedRow[1];
+          } else {
+            // Try to scan all properties for an email-like value
+            for (const key in typedRow) {
+              const value = typedRow[key];
+              if (value && typeof value === 'string' && value.includes('@')) {
+                email = value;
+                break;
+              }
+            }
+          }
+          
+          // Skip if no valid email
+          if (!email || typeof email !== 'string' || !email.includes('@')) {
+            continue;
+          }
+          
+          // Try to extract category/type
+          let category = null;
+          if ("A" in typedRow) {
+            category = typedRow["A"];
+          } else if ("Category" in typedRow || "CATEGORY" in typedRow || "Type" in typedRow || "TYPE" in typedRow) {
+            category = typedRow["Category"] || typedRow["CATEGORY"] || typedRow["Type"] || typedRow["TYPE"];
+          } else if (0 in typedRow) {
+            category = typedRow[0];
+          }
+          
+          // Try to extract company
+          let company = null;
+          if ("C" in typedRow) {
+            company = typedRow["C"];
+          } else if ("Company" in typedRow || "COMPANY" in typedRow || "Organization" in typedRow) {
+            company = typedRow["Company"] || typedRow["COMPANY"] || typedRow["Organization"];
+          } else if (2 in typedRow) {
+            company = typedRow[2];
+          }
+          
+          contacts.push({
+            email: email.trim(),
+            category: category ? String(category).trim() : undefined,
+            company: company ? String(company).trim() : undefined
+          });
+        } catch (err) {
+          console.warn("Error processing row:", err);
+          // Continue to next row if there's an error with current row
+          continue;
         }
-        
-        // The first column (A) contains the type (Arqu, Email, etc.)
-        const category = row["A"] || row[0] || row["type"] || null;
-        
-        // The third column (C) contains the company/role
-        const company = row["C"] || row[2] || row["company"] || null;
-        
-        contacts.push({
-          email: email,
-          category: category ? String(category) : undefined,
-          company: company ? String(company) : undefined
-        });
       }
+      
+      console.log(`Extracted ${contacts.length} contacts from Excel file`);
       
       // Send to storage to process
       const importResult = await storage.bulkImportContacts(contacts, req.user!.id);
@@ -1011,13 +1065,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = utils.sheet_to_json(sheet, { header: 1 });
       
       // Process rows (skip header row if it exists)
-      const startRow = data[0][0] === "A" || data[0][0] === "Email" ? 1 : 0;
+      const typedData = data as any[]; // Type assertion for the data array
+      const startRow = typedData[0] && typedData[0][0] === "A" || typedData[0] && typedData[0][0] === "Email" ? 1 : 0;
       const importedContacts = [];
       const errors = [];
       
-      for (let i = startRow; i < data.length; i++) {
-        const row = data[i];
-        if (!row[1] || typeof row[1] !== 'string') continue; // Skip if no email
+      for (let i = startRow; i < typedData.length; i++) {
+        const row = typedData[i] as any[];
+        if (!row || !row[1] || typeof row[1] !== 'string') continue; // Skip if no email
         
         try {
           const contactData = {
@@ -1040,7 +1095,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           importedContacts.push(contact);
         } catch (error) {
           // Skip duplicates (unique constraint on email)
-          errors.push({ row: i + 1, email: row[1], error: error.message });
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          errors.push({ row: i + 1, email: row[1], error: errorMessage });
         }
       }
       

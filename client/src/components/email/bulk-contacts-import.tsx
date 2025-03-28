@@ -5,7 +5,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileArchive, AlertCircle, CheckCircle2, FileUp } from "lucide-react";
+import { Upload, FileArchive, AlertCircle, CheckCircle2, FileUp, Download } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface BulkImportStats {
   total: number;
@@ -27,6 +28,36 @@ export default function BulkContactsImport({ onImportComplete }: BulkContactsImp
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  
+  const downloadTemplate = () => {
+    // Create a sample CSV content
+    const csvContent = [
+      ['Category', 'Email', 'Company'],
+      ['ARQUITECTURA', 'architect@example.com', 'ABC Architecture'],
+      ['INGENIERIA', 'engineer@example.com', 'XYZ Engineering'],
+      ['CONSTRUCCION', 'builder@example.com', '123 Construction']
+    ]
+      .map(row => row.join(','))
+      .join('\n');
+    
+    // Create a Blob with the CSV content
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    
+    // Create a download link and trigger click
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'contacts_template.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({
+      title: "Template Downloaded",
+      description: "A CSV template has been downloaded. You can open and edit it in Excel."
+    });
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0] || null;
@@ -179,7 +210,10 @@ export default function BulkContactsImport({ onImportComplete }: BulkContactsImp
                 or click to browse files
               </p>
               <p className="text-xs">
-                The file should contain emails in column B, categories in column A, and organizations in column C
+                Upload a .xlsx or .xls file with emails in column B, categories in column A, and organizations in column C
+              </p>
+              <p className="text-xs mt-1 text-amber-600">
+                Important: Make sure your file has the .xlsx or .xls extension
               </p>
             </div>
           )}
@@ -189,7 +223,18 @@ export default function BulkContactsImport({ onImportComplete }: BulkContactsImp
           <Alert variant="destructive" className="mt-4">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>
+              <p>{error}</p>
+              <div className="mt-2 text-sm">
+                <h4 className="font-semibold">Excel File Requirements:</h4>
+                <ul className="list-disc pl-4 mt-1 space-y-1">
+                  <li>File must be in .xlsx or .xls format</li>
+                  <li>Email addresses in column B (or a column labeled "Email")</li>
+                  <li>Categories in column A (or a column labeled "Category"/"Type")</li>
+                  <li>Company/Organization in column C (or a column labeled "Company"/"Organization")</li>
+                </ul>
+              </div>
+            </AlertDescription>
           </Alert>
         )}
         
@@ -227,7 +272,27 @@ export default function BulkContactsImport({ onImportComplete }: BulkContactsImp
         )}
       </CardContent>
       
-      <CardFooter className="flex justify-end">
+      <CardFooter className="flex justify-between gap-2">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={downloadTemplate}
+                disabled={isUploading}
+                className="flex gap-2 items-center"
+              >
+                <Download className="h-4 w-4" />
+                Download Template
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Download a sample CSV template for your contacts</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        
         <Button 
           variant="default" 
           disabled={!file || isUploading}

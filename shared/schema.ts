@@ -316,6 +316,7 @@ export const insertEmailSchema = createInsertSchema(emails).pick({
   generatedByAI: true,
   reviewedById: true,
   aiPrompt: true,
+  sentAt: true,
 });
 
 // Types
