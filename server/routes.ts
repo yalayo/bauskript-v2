@@ -843,8 +843,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
     try {
-      const contacts = await storage.getContacts();
-      res.json(contacts);
+      const page = req.query.page ? parseInt(req.query.page as string) : 1;
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+      
+      const result = await storage.getContacts(page, limit);
+      res.json(result);
     } catch (error) {
       next(error);
     }

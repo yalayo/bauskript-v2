@@ -18,7 +18,7 @@ import session from "express-session";
 import createMemoryStore from "memorystore";
 import connectPg from "connect-pg-simple";
 import { db } from "./db";
-import { eq, and, isNull, inArray, sql, asc, desc } from "drizzle-orm";
+import { eq, and, isNull, inArray, sql, asc, desc, count } from "drizzle-orm";
 import { Pool } from '@neondatabase/serverless';
 
 const MemoryStore = createMemoryStore(session);
@@ -107,13 +107,13 @@ export interface IStorage {
   resumeEmailCampaign(id: number): Promise<EmailCampaign>;
 
   // Contact methods
-  getContacts(): Promise<Contact[]>;
+  getContacts(page?: number, limit?: number): Promise<{ contacts: Contact[], total: number }>;
   getContact(id: number): Promise<Contact | undefined>;
   getContactByEmail(email: string): Promise<Contact | undefined>;
   createContact(contact: InsertContact): Promise<Contact>;
   updateContact(id: number, contact: Partial<InsertContact>): Promise<Contact>;
   deleteContact(id: number): Promise<void>;
-  bulkImportContacts(contacts: { email: string; category?: string; company?: string }[], userId: number): Promise<{
+  bulkImportContacts(contacts: { email: string; category?: string; company?: string; phone?: string }[], userId: number): Promise<{
     total: number;
     imported: number;
     duplicates: number;
@@ -954,8 +954,18 @@ export class MemStorage implements IStorage {
   }
   
   // Contact methods
-  async getContacts(): Promise<Contact[]> {
-    return Array.from(this.contacts.values());
+  async getContacts(page?: number, limit?: number): Promise<{ contacts: Contact[], total: number }> {
+    const allContacts = Array.from(this.contacts.values());
+    const total = allContacts.length;
+    
+    if (page !== undefined && limit !== undefined) {
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      const paginatedContacts = allContacts.slice(startIndex, endIndex);
+      return { contacts: paginatedContacts, total };
+    }
+    
+    return { contacts: allContacts, total };
   }
   
   async getContact(id: number): Promise<Contact | undefined> {
@@ -1887,8 +1897,22 @@ export class DatabaseStorage implements IStorage {
   }
   
   // Contact methods
-  async getContacts(): Promise<Contact[]> {
-    return await db.select().from(contacts);
+  async getContacts(page?: number, limit?: number): Promise<{ contacts: Contact[], total: number }> {
+    const total = await db.select({ count: count() }).from(contacts);
+    
+    if (page !== undefined && limit !== undefined) {
+      const offset = (page - 1) * limit;
+      const paginatedContacts = await db
+        .select()
+        .from(contacts)
+        .limit(limit)
+        .offset(offset);
+      
+      return { contacts: paginatedContacts, total: total[0].count };
+    }
+    
+    const allContacts = await db.select().from(contacts);
+    return { contacts: allContacts, total: total[0].count };
   }
   
   async getContact(id: number): Promise<Contact | undefined> {
@@ -1927,7 +1951,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(contacts).where(eq(contacts.id, id));
   }
   
-  async bulkImportContacts(contactsData: { email: string; category?: string; company?: string }[], userId: number): Promise<{
+  async bulkImportContacts(contactsData: { email: string; category?: string; company?: string; phone?: string }[], userId: number): Promise<{
     total: number;
     imported: number;
     duplicates: number;

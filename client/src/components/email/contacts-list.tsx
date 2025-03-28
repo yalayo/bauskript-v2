@@ -4,7 +4,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Contact } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Trash2, User, Mail, Edit } from "lucide-react";
+import { Trash2, User, Mail, Edit, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -26,16 +26,38 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+
+interface ContactsResponse {
+  contacts: Contact[];
+  total: number;
+}
 
 export default function ContactsList() {
   const { toast } = useToast();
   const [selectedContact, setSelectedContact] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
 
-  const { data: contacts = [], isLoading } = useQuery<Contact[]>({
-    queryKey: ["/api/contacts"],
+  const { data, isLoading } = useQuery<ContactsResponse>({
+    queryKey: ["/api/contacts", page, limit],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/contacts?page=${page}&limit=${limit}`);
+      return res.json();
+    },
     retry: false,
   });
+  
+  const contacts = data?.contacts || [];
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -46,7 +68,7 @@ export default function ContactsList() {
         title: "Contact deleted",
         description: "The contact has been deleted successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] }); // Invalidate all contact queries
     },
     onError: (error: Error) => {
       toast({
@@ -191,6 +213,108 @@ export default function ContactsList() {
           </TableBody>
         </Table>
       )}
+      
+      {/* Only show pagination if we're not searching and there's more than one page */}
+      {!searchTerm && data?.total && data.total > limit && (
+        <Pagination className="mt-4">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious 
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                className={page <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+            
+            {/* First page */}
+            <PaginationItem>
+              <PaginationLink 
+                onClick={() => setPage(1)}
+                isActive={page === 1}
+              >
+                1
+              </PaginationLink>
+            </PaginationItem>
+            
+            {/* Show ellipsis if current page is more than 3 */}
+            {page > 3 && (
+              <PaginationItem>
+                <PaginationEllipsis />
+              </PaginationItem>
+            )}
+            
+            {/* Show current page and surrounding pages */}
+            {page > 2 && (
+              <PaginationItem>
+                <PaginationLink 
+                  onClick={() => setPage(page - 1)}
+                >
+                  {page - 1}
+                </PaginationLink>
+              </PaginationItem>
+            )}
+            
+            {page > 1 && page < Math.ceil(data.total / limit) && (
+              <PaginationItem>
+                <PaginationLink 
+                  onClick={() => setPage(page)} 
+                  isActive={true}
+                >
+                  {page}
+                </PaginationLink>
+              </PaginationItem>
+            )}
+            
+            {page < Math.ceil(data.total / limit) - 1 && (
+              <PaginationItem>
+                <PaginationLink 
+                  onClick={() => setPage(page + 1)}
+                >
+                  {page + 1}
+                </PaginationLink>
+              </PaginationItem>
+            )}
+            
+            {/* Show ellipsis if there are more pages */}
+            {page < Math.ceil(data.total / limit) - 2 && (
+              <PaginationItem>
+                <PaginationEllipsis />
+              </PaginationItem>
+            )}
+            
+            {/* Last page */}
+            {Math.ceil(data.total / limit) > 1 && (
+              <PaginationItem>
+                <PaginationLink 
+                  onClick={() => setPage(Math.ceil(data.total / limit))}
+                  isActive={page === Math.ceil(data.total / limit)}
+                >
+                  {Math.ceil(data.total / limit)}
+                </PaginationLink>
+              </PaginationItem>
+            )}
+            
+            <PaginationItem>
+              <PaginationNext 
+                onClick={() => setPage(p => Math.min(Math.ceil(data.total / limit), p + 1))}
+                className={page >= Math.ceil(data.total / limit) ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
+
+      {/* Display total contacts info */}
+      <div className="text-center text-sm text-muted-foreground mt-2">
+        {data?.total ? (
+          searchTerm ? (
+            `Showing ${filteredContacts.length} filtered contacts out of ${data.total} total contacts`
+          ) : (
+            `Showing ${contacts.length} contacts out of ${data.total} total (Page ${page} of ${Math.max(1, Math.ceil(data.total / limit))})`
+          )
+        ) : (
+          "No contacts available"
+        )}
+      </div>
     </div>
   );
 }
