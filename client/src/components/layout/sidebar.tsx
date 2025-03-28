@@ -165,6 +165,23 @@ export const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
             <i className="fas fa-newspaper"></i>
             <span>Blog</span>
           </a>
+          {user?.role === "admin" && (
+            <a
+              href="/survey-analytics"
+              onClick={(e) => {
+                if (location === "/survey-analytics") {
+                  e.preventDefault();
+                  if (window.innerWidth < 1024) {
+                    toggleSidebar();
+                  }
+                }
+              }}
+              className={`sidebar-link ${location === "/survey-analytics" ? "active" : ""}`}
+            >
+              <i className="fas fa-chart-pie"></i>
+              <span>Survey Analytics</span>
+            </a>
+          )}
 
           <div className="px-4 py-2 mt-6 text-xs font-semibold text-gray-500 uppercase tracking-wide">
             Settings

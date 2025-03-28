@@ -10,7 +10,9 @@ import {
   insertPhotoSchema,
   insertBlogPostSchema,
   insertQuestionnaireSchema,
-  insertEmailCampaignSchema
+  insertEmailCampaignSchema,
+  insertSurveyQuestionSchema,
+  insertSurveyResponseSchema
 } from "@shared/schema";
 import Stripe from "stripe";
 import { z } from "zod";
@@ -478,6 +480,142 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const questionnaires = await storage.getQuestionnaires();
       res.json(questionnaires);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Survey Questions routes
+  app.get("/api/survey-questions", async (req, res, next) => {
+    try {
+      const category = req.query.category as string | undefined;
+      let questions;
+      
+      if (category) {
+        questions = await storage.getSurveyQuestionsByCategory(category);
+      } else {
+        questions = await storage.getSurveyQuestions();
+      }
+      
+      // Only return active questions for public consumption
+      const activeQuestions = questions.filter(q => q.active);
+      
+      res.json(activeQuestions);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  app.get("/api/survey-questions/:id", async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const question = await storage.getSurveyQuestion(id);
+      if (question) {
+        res.json(question);
+      } else {
+        res.status(404).json({ message: "Survey question not found" });
+      }
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  app.post("/api/survey-questions", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (req.user?.role !== "admin") return res.sendStatus(403);
+    
+    try {
+      const validatedData = insertSurveyQuestionSchema.parse(req.body);
+      const question = await storage.createSurveyQuestion(validatedData);
+      res.status(201).json(question);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid data", errors: error.errors });
+      } else {
+        next(error);
+      }
+    }
+  });
+  
+  app.patch("/api/survey-questions/:id", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (req.user?.role !== "admin") return res.sendStatus(403);
+    
+    try {
+      const id = parseInt(req.params.id);
+      const validatedData = insertSurveyQuestionSchema.partial().parse(req.body);
+      const question = await storage.updateSurveyQuestion(id, validatedData);
+      res.json(question);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid data", errors: error.errors });
+      } else {
+        next(error);
+      }
+    }
+  });
+  
+  app.delete("/api/survey-questions/:id", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (req.user?.role !== "admin") return res.sendStatus(403);
+    
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteSurveyQuestion(id);
+      res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  // Survey Responses routes
+  app.post("/api/survey-responses", async (req, res, next) => {
+    try {
+      const validatedData = insertSurveyResponseSchema.parse(req.body);
+      const response = await storage.createSurveyResponse(validatedData);
+      res.status(201).json(response);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid data", errors: error.errors });
+      } else {
+        next(error);
+      }
+    }
+  });
+  
+  app.get("/api/survey-responses", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (req.user?.role !== "admin") return res.sendStatus(403);
+    
+    try {
+      const responses = await storage.getSurveyResponses();
+      res.json(responses);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  // Survey Analytics routes
+  app.get("/api/survey-analytics", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (req.user?.role !== "admin") return res.sendStatus(403);
+    
+    try {
+      const analytics = await storage.getSurveyAnalytics();
+      res.json(analytics);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  app.get("/api/survey-analytics/:questionId", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (req.user?.role !== "admin") return res.sendStatus(403);
+    
+    try {
+      const questionId = parseInt(req.params.questionId);
+      const analytics = await storage.getSurveyAnalyticsByQuestionId(questionId);
+      res.json(analytics);
     } catch (error) {
       next(error);
     }

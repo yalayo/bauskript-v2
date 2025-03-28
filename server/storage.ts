@@ -7,7 +7,9 @@ import {
   photos, type Photo, type InsertPhoto,
   blogPosts, type BlogPost, type InsertBlogPost,
   questionnaires, type Questionnaire, type InsertQuestionnaire,
-  emailCampaigns, type EmailCampaign, type InsertEmailCampaign
+  emailCampaigns, type EmailCampaign, type InsertEmailCampaign,
+  surveyQuestions, type SurveyQuestion, type InsertSurveyQuestion,
+  surveyResponses, type SurveyResponse, type InsertSurveyResponse
 } from "@shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -60,6 +62,23 @@ export interface IStorage {
   createBlogPost(post: InsertBlogPost): Promise<BlogPost>;
   updateBlogPost(id: number, post: Partial<InsertBlogPost>): Promise<BlogPost>;
   deleteBlogPost(id: number): Promise<void>;
+  
+  // Survey Question methods
+  getSurveyQuestions(): Promise<SurveyQuestion[]>;
+  getSurveyQuestionsByCategory(category: string): Promise<SurveyQuestion[]>;
+  getSurveyQuestion(id: number): Promise<SurveyQuestion | undefined>;
+  createSurveyQuestion(question: InsertSurveyQuestion): Promise<SurveyQuestion>;
+  updateSurveyQuestion(id: number, question: Partial<InsertSurveyQuestion>): Promise<SurveyQuestion>;
+  deleteSurveyQuestion(id: number): Promise<void>;
+
+  // Survey Response methods
+  getSurveyResponses(): Promise<SurveyResponse[]>;
+  getSurveyResponse(id: number): Promise<SurveyResponse | undefined>;
+  createSurveyResponse(response: InsertSurveyResponse): Promise<SurveyResponse>;
+  
+  // Survey Analytics methods
+  getSurveyAnalytics(): Promise<any>;
+  getSurveyAnalyticsByQuestionId(questionId: number): Promise<any>;
 
   // Questionnaire methods
   getQuestionnaires(): Promise<Questionnaire[]>;
@@ -82,6 +101,8 @@ export class MemStorage implements IStorage {
   private issues: Map<number, Issue>;
   private photos: Map<number, Photo>;
   private blogPosts: Map<number, BlogPost>;
+  private surveyQuestions: Map<number, SurveyQuestion>;
+  private surveyResponses: Map<number, SurveyResponse>;
   private questionnaires: Map<number, Questionnaire>;
   private emailCampaigns: Map<number, EmailCampaign>;
 
@@ -92,6 +113,8 @@ export class MemStorage implements IStorage {
   private issueCurrentId: number;
   private photoCurrentId: number;
   private blogPostCurrentId: number;
+  private surveyQuestionCurrentId: number;
+  private surveyResponseCurrentId: number;
   private questionnaireCurrentId: number;
   private emailCampaignCurrentId: number;
 
@@ -105,6 +128,8 @@ export class MemStorage implements IStorage {
     this.issues = new Map();
     this.photos = new Map();
     this.blogPosts = new Map();
+    this.surveyQuestions = new Map();
+    this.surveyResponses = new Map();
     this.questionnaires = new Map();
     this.emailCampaigns = new Map();
 
@@ -115,6 +140,8 @@ export class MemStorage implements IStorage {
     this.issueCurrentId = 1;
     this.photoCurrentId = 1;
     this.blogPostCurrentId = 1;
+    this.surveyQuestionCurrentId = 1;
+    this.surveyResponseCurrentId = 1;
     this.questionnaireCurrentId = 1;
     this.emailCampaignCurrentId = 1;
 
@@ -150,6 +177,44 @@ export class MemStorage implements IStorage {
       name: "Suburban Residence",
       dueDate: "2024-01-10",
       progress: 25,
+    });
+    
+    // Initialize survey questions (20 yes/no questions for construction management)
+    const surveyQuestions = [
+      // Budget & Cost Management
+      { question: "Do you have a detailed budget for your construction project?", category: "Budget", orderIndex: 1, active: true },
+      { question: "Are you experiencing cost overruns on your current projects?", category: "Budget", orderIndex: 2, active: true },
+      { question: "Do you use software for cost tracking and management?", category: "Budget", orderIndex: 3, active: true },
+      { question: "Are you satisfied with your current budgeting process?", category: "Budget", orderIndex: 4, active: true },
+      
+      // Project Management
+      { question: "Do you use dedicated construction project management software?", category: "Management", orderIndex: 5, active: true },
+      { question: "Is your current scheduling process working efficiently?", category: "Management", orderIndex: 6, active: true },
+      { question: "Do you track daily progress on your construction sites?", category: "Management", orderIndex: 7, active: true },
+      { question: "Can you easily generate project reports for stakeholders?", category: "Management", orderIndex: 8, active: true },
+      { question: "Do subcontractors have access to your project management system?", category: "Management", orderIndex: 9, active: true },
+      
+      // Safety & Compliance
+      { question: "Do you document safety incidents digitally?", category: "Safety", orderIndex: 10, active: true },
+      { question: "Can workers report safety concerns through a mobile app?", category: "Safety", orderIndex: 11, active: true },
+      { question: "Do you track compliance with safety regulations?", category: "Safety", orderIndex: 12, active: true },
+      { question: "Are safety inspections performed and recorded regularly?", category: "Safety", orderIndex: 13, active: true },
+      
+      // Communication
+      { question: "Do you have a centralized communication system for your projects?", category: "Communication", orderIndex: 14, active: true },
+      { question: "Are you satisfied with the current level of communication on your projects?", category: "Communication", orderIndex: 15, active: true },
+      { question: "Can stakeholders access project updates in real-time?", category: "Communication", orderIndex: 16, active: true },
+      
+      // Resource Management
+      { question: "Do you digitally track equipment usage and availability?", category: "Resources", orderIndex: 17, active: true },
+      { question: "Is your material procurement process efficient?", category: "Resources", orderIndex: 18, active: true },
+      { question: "Do you experience delays due to resource management issues?", category: "Resources", orderIndex: 19, active: true },
+      { question: "Would you be interested in an integrated construction management solution?", category: "General", orderIndex: 20, active: true },
+    ];
+    
+    // Add questions to storage
+    surveyQuestions.forEach(q => {
+      this.createSurveyQuestion(q);
     });
   }
 
@@ -382,6 +447,143 @@ export class MemStorage implements IStorage {
       throw new Error("Blog post not found");
     }
     this.blogPosts.delete(id);
+  }
+
+  // Survey Question methods
+  async getSurveyQuestions(): Promise<SurveyQuestion[]> {
+    return Array.from(this.surveyQuestions.values());
+  }
+
+  async getSurveyQuestionsByCategory(category: string): Promise<SurveyQuestion[]> {
+    return Array.from(this.surveyQuestions.values()).filter(
+      (question) => question.category === category
+    );
+  }
+
+  async getSurveyQuestion(id: number): Promise<SurveyQuestion | undefined> {
+    return this.surveyQuestions.get(id);
+  }
+
+  async createSurveyQuestion(question: InsertSurveyQuestion): Promise<SurveyQuestion> {
+    const id = this.surveyQuestionCurrentId++;
+    const newQuestion: SurveyQuestion = { 
+      ...question, 
+      id, 
+      createdAt: new Date() 
+    };
+    this.surveyQuestions.set(id, newQuestion);
+    return newQuestion;
+  }
+
+  async updateSurveyQuestion(id: number, question: Partial<InsertSurveyQuestion>): Promise<SurveyQuestion> {
+    const existingQuestion = await this.getSurveyQuestion(id);
+    if (!existingQuestion) {
+      throw new Error("Survey question not found");
+    }
+    const updatedQuestion = { ...existingQuestion, ...question };
+    this.surveyQuestions.set(id, updatedQuestion);
+    return updatedQuestion;
+  }
+
+  async deleteSurveyQuestion(id: number): Promise<void> {
+    const existingQuestion = await this.getSurveyQuestion(id);
+    if (!existingQuestion) {
+      throw new Error("Survey question not found");
+    }
+    this.surveyQuestions.delete(id);
+  }
+
+  // Survey Response methods
+  async getSurveyResponses(): Promise<SurveyResponse[]> {
+    return Array.from(this.surveyResponses.values());
+  }
+
+  async getSurveyResponse(id: number): Promise<SurveyResponse | undefined> {
+    return this.surveyResponses.get(id);
+  }
+
+  async createSurveyResponse(response: InsertSurveyResponse): Promise<SurveyResponse> {
+    const id = this.surveyResponseCurrentId++;
+    const newResponse: SurveyResponse = { 
+      ...response, 
+      id, 
+      createdAt: new Date() 
+    };
+    this.surveyResponses.set(id, newResponse);
+    return newResponse;
+  }
+
+  // Survey Analytics methods
+  async getSurveyAnalytics(): Promise<any> {
+    const responses = await this.getSurveyResponses();
+    const questions = await this.getSurveyQuestions();
+    
+    // Initialize analytics object
+    const analytics = {
+      totalResponses: responses.length,
+      responsesByDate: this.getResponsesByDate(responses),
+      questionAnalytics: this.getQuestionAnalytics(questions, responses)
+    };
+    
+    return analytics;
+  }
+
+  async getSurveyAnalyticsByQuestionId(questionId: number): Promise<any> {
+    const responses = await this.getSurveyResponses();
+    const question = await this.getSurveyQuestion(questionId);
+    
+    if (!question) {
+      throw new Error("Survey question not found");
+    }
+    
+    // Count yes/no responses for this specific question
+    const analytics = this.analyzeQuestion(question, responses);
+    
+    return analytics;
+  }
+
+  private getResponsesByDate(responses: SurveyResponse[]): Record<string, number> {
+    const responsesByDate: Record<string, number> = {};
+    
+    responses.forEach(response => {
+      const date = new Date(response.createdAt).toISOString().split('T')[0];
+      responsesByDate[date] = (responsesByDate[date] || 0) + 1;
+    });
+    
+    return responsesByDate;
+  }
+
+  private getQuestionAnalytics(questions: SurveyQuestion[], responses: SurveyResponse[]): any[] {
+    return questions.map(question => this.analyzeQuestion(question, responses));
+  }
+
+  private analyzeQuestion(question: SurveyQuestion, responses: SurveyResponse[]): any {
+    let yesCount = 0;
+    let noCount = 0;
+    let totalResponses = 0;
+    
+    responses.forEach(response => {
+      const answer = (response.answers as any[]).find(a => a.questionId === question.id);
+      if (answer) {
+        totalResponses++;
+        if (answer.answer === true) {
+          yesCount++;
+        } else {
+          noCount++;
+        }
+      }
+    });
+    
+    return {
+      questionId: question.id,
+      question: question.question,
+      category: question.category,
+      totalResponses,
+      yesCount,
+      noCount,
+      yesPercentage: totalResponses ? Math.round((yesCount / totalResponses) * 100) : 0,
+      noPercentage: totalResponses ? Math.round((noCount / totalResponses) * 100) : 0
+    };
   }
 
   // Questionnaire methods

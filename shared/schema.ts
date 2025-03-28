@@ -75,6 +75,25 @@ export const blogPosts = pgTable("blog_posts", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const surveyQuestions = pgTable("survey_questions", {
+  id: serial("id").primaryKey(),
+  question: text("question").notNull(),
+  category: text("category"),
+  orderIndex: integer("order_index").notNull(),
+  active: boolean("active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const surveyResponses = pgTable("survey_responses", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull(),
+  name: text("name"),
+  company: text("company"),
+  phone: text("phone"),
+  answers: jsonb("answers").notNull(), // JSON array of {questionId: number, answer: boolean}
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const questionnaires = pgTable("questionnaires", {
   id: serial("id").primaryKey(),
   email: text("email").notNull(),
@@ -152,6 +171,21 @@ export const insertBlogPostSchema = createInsertSchema(blogPosts).pick({
   createdBy: true,
 });
 
+export const insertSurveyQuestionSchema = createInsertSchema(surveyQuestions).pick({
+  question: true,
+  category: true,
+  orderIndex: true,
+  active: true,
+});
+
+export const insertSurveyResponseSchema = createInsertSchema(surveyResponses).pick({
+  email: true,
+  name: true,
+  company: true,
+  phone: true,
+  answers: true,
+});
+
 export const insertQuestionnaireSchema = createInsertSchema(questionnaires).pick({
   email: true,
   responses: true,
@@ -186,6 +220,12 @@ export type Photo = typeof photos.$inferSelect;
 
 export type InsertBlogPost = z.infer<typeof insertBlogPostSchema>;
 export type BlogPost = typeof blogPosts.$inferSelect;
+
+export type InsertSurveyQuestion = z.infer<typeof insertSurveyQuestionSchema>;
+export type SurveyQuestion = typeof surveyQuestions.$inferSelect;
+
+export type InsertSurveyResponse = z.infer<typeof insertSurveyResponseSchema>;
+export type SurveyResponse = typeof surveyResponses.$inferSelect;
 
 export type InsertQuestionnaire = z.infer<typeof insertQuestionnaireSchema>;
 export type Questionnaire = typeof questionnaires.$inferSelect;

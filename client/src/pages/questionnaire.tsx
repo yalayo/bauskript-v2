@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/use-auth";
+import { useLocation } from "wouter";
 import QuestionForm from "@/components/questionnaire/question-form";
 
 const emailSchema = z.object({
@@ -21,6 +23,8 @@ export default function QuestionnairePage() {
   const [currentStep, setCurrentStep] = useState<"email" | "questions" | "complete">("email");
   const [userEmail, setUserEmail] = useState("");
   const { toast } = useToast();
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
 
   const form = useForm<EmailFormValues>({
     resolver: zodResolver(emailSchema),
@@ -143,16 +147,26 @@ export default function QuestionnairePage() {
                   <Button
                     variant="outline"
                     className="w-full"
-                    onClick={() => window.location.href = "/"}
+                    onClick={() => setLocation("/")}
                   >
                     Go to Home Page
                   </Button>
                   <Button
                     className="w-full"
-                    onClick={() => window.location.href = "/checkout"}
+                    onClick={() => setLocation("/checkout")}
                   >
                     Explore Pricing Options
                   </Button>
+                  {user?.role === "admin" && (
+                    <Button
+                      variant="secondary"
+                      className="w-full"
+                      onClick={() => setLocation("/survey-analytics")}
+                    >
+                      <i className="fas fa-chart-pie mr-2"></i>
+                      View Survey Analytics
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>

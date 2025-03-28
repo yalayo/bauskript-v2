@@ -20,6 +20,7 @@ import SettingsPage from "@/pages/settings";
 import CheckoutPage from "@/pages/checkout";
 import SubscribePage from "@/pages/subscribe";
 import QuestionnairePage from "@/pages/questionnaire";
+import SurveyAnalyticsPage from "@/pages/survey-analytics";
 
 function Router() {
   return (
@@ -35,6 +36,7 @@ function Router() {
         <ProtectedRoute path="/email-campaigns" component={EmailCampaignsPage} />
         <ProtectedRoute path="/blog" component={BlogPage} />
         <ProtectedRoute path="/settings" component={SettingsPage} />
+        <ProtectedRoute path="/survey-analytics" component={SurveyAnalyticsPage} />
         <Route path="/checkout" component={CheckoutPage} />
         <Route path="/subscribe" component={SubscribePage} />
         <Route path="/questionnaire" component={QuestionnairePage} />
