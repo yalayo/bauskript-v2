@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, ArrowLeft, BarChart3, Play, Pause, Calendar, CheckCircle2, UserRound, UserPlus } from "lucide-react";
+import { Loader2, ArrowLeft, BarChart3, Play, Pause, Calendar, CheckCircle2, UserRound, UserPlus, PlayCircle, StopCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import CampaignProcessingInfo from "@/components/email/campaign-processing-info";
 import ContactsCampaignAssign from "@/components/email/contacts-campaign-assign";
@@ -133,9 +133,69 @@ export default function CampaignDetail() {
     }
   });
   
+  // Start campaign mutation
+  const startMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', `/api/email-campaigns/${campaignId}/start`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns', campaignId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns', campaignId, 'processing-info'] });
+      toast({
+        title: "Campaign Started",
+        description: "The campaign is now running and will send emails based on configured settings"
+      });
+    },
+    onError: (error: any) => {
+      // Check if it's a Gmail authentication error
+      if (error.status === 400 && error.data?.needsGmailAuth) {
+        toast({
+          title: "Gmail Authentication Required",
+          description: "Please connect your Gmail account to start this campaign",
+          variant: "destructive"
+        });
+        navigate('/gmail-auth');
+      } else {
+        toast({
+          title: "Error",
+          description: `Failed to start campaign: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          variant: "destructive"
+        });
+      }
+    }
+  });
+  
+  // Stop campaign mutation
+  const stopMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', `/api/email-campaigns/${campaignId}/stop`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns', campaignId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/email-campaigns', campaignId, 'processing-info'] });
+      toast({
+        title: "Campaign Stopped",
+        description: "The campaign has been completely stopped"
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Failed to stop campaign: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive"
+      });
+    }
+  });
+  
   // Handle campaign actions
   const handleResume = () => resumeMutation.mutate();
   const handlePause = () => pauseMutation.mutate();
+  const handleStart = () => startMutation.mutate();
+  const handleStop = () => stopMutation.mutate();
   const handleProcessEmail = () => processEmailMutation.mutate();
   
   if (isLoading) {
@@ -176,6 +236,8 @@ export default function CampaignDetail() {
         return <Badge variant="default">Running</Badge>;
       case "paused":
         return <Badge variant="outline">Paused</Badge>;
+      case "stopped":
+        return <Badge variant="destructive">Stopped</Badge>;
       case "completed":
         return <Badge>Completed</Badge>;
       default:
@@ -203,8 +265,23 @@ export default function CampaignDetail() {
         </div>
         
         <div className="mt-4 md:mt-0 flex flex-col gap-2 items-end">
-          <div className="flex gap-2">
-            {campaign.status === 'paused' || campaign.status === 'draft' ? (
+          <div className="flex flex-wrap gap-2 justify-end">
+            {/* New Start button for draft or stopped campaigns */}
+            {(campaign.status === 'draft' || campaign.status === 'stopped') && (
+              <Button 
+                onClick={handleStart} 
+                disabled={startMutation.isPending || !(gmailStatus?.authenticated)}
+                className="gap-2"
+                title={!gmailStatus?.authenticated ? "Gmail authentication required to start campaigns" : ""}
+                variant="default"
+              >
+                {startMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />}
+                Start Campaign
+              </Button>
+            )}
+            
+            {/* Resume button for paused campaigns */}
+            {campaign.status === 'paused' && (
               <Button 
                 onClick={handleResume} 
                 disabled={resumeMutation.isPending || !(gmailStatus?.authenticated)}
@@ -214,7 +291,10 @@ export default function CampaignDetail() {
                 {resumeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                 Resume
               </Button>
-            ) : campaign.status === 'running' || campaign.status === 'scheduled' ? (
+            )}
+            
+            {/* Pause button for running campaigns */}
+            {campaign.status === 'running' && (
               <Button 
                 onClick={handlePause} 
                 variant="outline" 
@@ -224,18 +304,35 @@ export default function CampaignDetail() {
                 {pauseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
                 Pause
               </Button>
-            ) : null}
+            )}
             
-            <Button 
-              onClick={handleProcessEmail}
-              variant="secondary"
-              disabled={processEmailMutation.isPending || campaign.status !== 'running' || !(gmailStatus?.authenticated)}
-              className="gap-2"
-              title={!gmailStatus?.authenticated ? "Gmail authentication required to process emails" : ""}
-            >
-              {processEmailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Process Next Email
-            </Button>
+            {/* Stop button for paused or running campaigns */}
+            {(campaign.status === 'paused' || campaign.status === 'running') && (
+              <Button 
+                onClick={handleStop} 
+                variant="destructive" 
+                disabled={stopMutation.isPending}
+                className="gap-2"
+                title="Completely stop this campaign. This action cannot be undone."
+              >
+                {stopMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <StopCircle className="h-4 w-4" />}
+                Stop
+              </Button>
+            )}
+            
+            {/* Process next email for running campaigns */}
+            {campaign.status === 'running' && (
+              <Button 
+                onClick={handleProcessEmail}
+                variant="secondary"
+                disabled={processEmailMutation.isPending || !(gmailStatus?.authenticated)}
+                className="gap-2"
+                title={!gmailStatus?.authenticated ? "Gmail authentication required to process emails" : ""}
+              >
+                {processEmailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                Process Next Email
+              </Button>
+            )}
           </div>
           
           {!gmailStatus?.authenticated && (

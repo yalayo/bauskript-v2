@@ -11,6 +11,11 @@ import {
   stopCampaignProcessing, 
   initializeEmailProcessing 
 } from "./email-processor";
+import {
+  getUserInfo,
+  checkGmailQuota,
+  getGmailService
+} from "./gmail";
 import { 
   insertProjectSchema, 
   insertDailyReportSchema, 
@@ -57,7 +62,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Setup authentication routes
   setupAuth(app);
-
+  
+  // Gmail status check endpoint
+  app.get("/api/gmail/status", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      // Check if the user has Gmail credentials
+      if (!req.user?.googleAccessToken) {
+        return res.json({
+          authenticated: false,
+          message: "Not authenticated with Gmail"
+        });
+      }
+      
+      try {
+        // Try to get Gmail service to verify token is valid
+        await getGmailService(req.user);
+        
+        // Get user info
+        const userInfo = await getUserInfo(req.user.googleAccessToken);
+        
+        // Check quota limits
+        const quotaInfo = await checkGmailQuota(req.user);
+        
+        return res.json({
+          authenticated: true,
+          email: userInfo.email,
+          name: userInfo.name,
+          quotaRemaining: quotaInfo.quotaRemaining,
+          dailySendLimit: quotaInfo.dailyLimit || 400
+        });
+      } catch (error) {
+        console.error("Gmail authentication error:", error);
+        return res.json({
+          authenticated: false,
+          error: "Gmail authentication error",
+          message: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+    } catch (error) {
+      next(error);
+    }
+  });
+  
   // Projects routes
   app.get("/api/projects", async (req, res, next) => {
     try {
@@ -1013,11 +1061,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  app.post("/api/email-campaigns/:id/stop", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Stop the email processing for this campaign
+      stopCampaignProcessing(id);
+      
+      // Update the campaign status to stopped
+      const updatedCampaign = await storage.updateEmailCampaign(id, {
+        status: 'stopped',
+        statusMessage: 'Campaign stopped by user'
+      });
+      
+      res.json(updatedCampaign);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  app.post("/api/email-campaigns/:id/start", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Check Gmail authentication status before starting
+      try {
+        // Verify Gmail authentication status
+        if (!req.user?.googleAccessToken) {
+          return res.status(400).json({ 
+            error: "Gmail authentication required",
+            needsGmailAuth: true
+          });
+        }
+        
+        // Try to get Gmail service to verify token is valid
+        await getGmailService(req.user);
+      } catch (error) {
+        console.error("Gmail authentication error:", error);
+        return res.status(400).json({ 
+          error: "Gmail authentication failed. Please reconnect your Gmail account.",
+          needsGmailAuth: true
+        });
+      }
+      
+      // Get the campaign
+      const campaign = await storage.getEmailCampaign(id);
+      if (!campaign) {
+        return res.status(404).json({ error: "Campaign not found" });
+      }
+      
+      // Update campaign status to running
+      const updatedCampaign = await storage.updateEmailCampaign(id, {
+        status: 'running',
+        statusMessage: 'Campaign started',
+        lastSentAt: null,
+        startedAt: new Date()
+      });
+      
+      // Start the email processing for this campaign
+      await startCampaignProcessing(id);
+      
+      res.json(updatedCampaign);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
   app.post("/api/email-campaigns/:id/resume", async (req, res, next) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
     try {
       const id = parseInt(req.params.id);
+      
+      // Check Gmail authentication status before resuming
+      try {
+        // Verify Gmail authentication status
+        if (!req.user?.googleAccessToken) {
+          return res.status(400).json({ 
+            error: "Gmail authentication required",
+            needsGmailAuth: true
+          });
+        }
+        
+        // Try to get Gmail service to verify token is valid
+        await getGmailService(req.user);
+      } catch (error) {
+        console.error("Gmail authentication error:", error);
+        return res.status(400).json({ 
+          error: "Gmail authentication failed. Please reconnect your Gmail account.",
+          needsGmailAuth: true
+        });
+      }
+      
       const updatedCampaign = await storage.resumeEmailCampaign(id);
       
       // Start the email processing for this campaign

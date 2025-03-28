@@ -39,12 +39,33 @@ export async function startCampaignProcessing(campaignId: number): Promise<void>
     return;
   }
   
-  // Check if the user has Gmail credentials
-  if (!user.googleAccessToken) {
-    console.error(`User ${user.id} does not have Gmail credentials`);
+  // Verify Gmail authentication before starting
+  try {
+    // Check if the user has Gmail credentials
+    if (!user.googleAccessToken) {
+      console.error(`User ${user.id} does not have Gmail credentials`);
+      await storage.updateEmailCampaign(campaignId, { 
+        status: 'paused',
+        statusMessage: 'Gmail authentication required'
+      });
+      return;
+    }
+    
+    // Try to get Gmail service to verify token is valid
+    await getGmailService(user);
+    
+    // Check quota limits
+    try {
+      const quotaInfo = await getUserInfo(user.googleAccessToken);
+      console.log(`Gmail authenticated for user ${user.id} (${quotaInfo.email})`);
+    } catch (error) {
+      console.error(`Error checking Gmail user info: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error(`Gmail authentication error for user ${user.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     await storage.updateEmailCampaign(campaignId, { 
       status: 'paused',
-      statusMessage: 'Gmail authentication required'
+      statusMessage: 'Gmail authentication failed. Please reconnect Gmail account.'
     });
     return;
   }
@@ -222,6 +243,14 @@ export async function initializeEmailProcessing(): Promise<void> {
     // Start processing for each running campaign
     for (const campaign of runningCampaigns) {
       await startCampaignProcessing(campaign.id);
+    }
+    
+    // Make sure stopped campaigns stay stopped
+    const stoppedCampaigns = campaigns.filter(c => c.status === 'stopped');
+    for (const campaign of stoppedCampaigns) {
+      // Ensure the timer is cleared if it exists
+      stopCampaignProcessing(campaign.id);
+      console.log(`Ensuring stopped campaign ${campaign.id} remains stopped`);
     }
   } catch (error) {
     console.error('Error initializing email processing:', error);
