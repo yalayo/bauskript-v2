@@ -72,7 +72,8 @@ export function setupAuth(app: Express) {
   // Google OAuth strategy
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REDIRECT_URI) {
     console.log('Setting up Google OAuth strategy with:');
-    console.log('- Client ID:', process.env.GOOGLE_CLIENT_ID.substring(0, 8) + '...');
+    console.log('- Client ID:', process.env.GOOGLE_CLIENT_ID);
+    console.log('- Client Secret length:', process.env.GOOGLE_CLIENT_SECRET.length);
     console.log('- Using configured callback URL:', process.env.GOOGLE_REDIRECT_URI);
     
     passport.use(

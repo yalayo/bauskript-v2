@@ -42,6 +42,19 @@ if (stripeSecretKey) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Debug endpoint to check OAuth configuration
+  app.get('/api/debug/oauth-config', (req, res) => {
+    res.json({
+      clientId: process.env.GOOGLE_CLIENT_ID?.substring(0, 10) + '...',
+      clientIdLength: process.env.GOOGLE_CLIENT_ID?.length,
+      clientSecretLength: process.env.GOOGLE_CLIENT_SECRET?.length,
+      redirectUri: process.env.GOOGLE_REDIRECT_URI,
+      host: req.headers.host,
+      protocol: req.protocol,
+      baseUrl: `${req.protocol}://${req.headers.host}`
+    });
+  });
+  
   // Setup authentication routes
   setupAuth(app);
 

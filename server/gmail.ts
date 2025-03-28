@@ -9,8 +9,11 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_REDIRECT_URI
 );
 
-// Log the redirect URI being used for debugging
-console.log('Gmail OAuth2 client using redirect URI:', process.env.GOOGLE_REDIRECT_URI);
+// Log the OAuth client configuration for debugging
+console.log('Gmail OAuth2 client configured with:');
+console.log('- Client ID:', process.env.GOOGLE_CLIENT_ID);
+console.log('- Client Secret length:', process.env.GOOGLE_CLIENT_SECRET?.length);
+console.log('- Redirect URI:', process.env.GOOGLE_REDIRECT_URI);
 
 // Exchange authorization code for tokens
 export async function getTokensFromCode(code: string) {
