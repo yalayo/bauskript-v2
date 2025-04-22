@@ -102,7 +102,7 @@ export default function LandingPage() {
               alt="Construction Management" 
               className="w-40 h-40 mb-6"
               onError={(e) => {
-                e.currentTarget.src = "https://via.placeholder.com/160x160?text=Construction";
+                //e.currentTarget.src = "https://via.placeholder.com/160x160?text=Construction";
               }}
             />
             <div className="text-center mb-6">
