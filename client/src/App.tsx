@@ -23,7 +23,7 @@ import CheckoutPage from "@/pages/checkout";
 import SubscribePage from "@/pages/subscribe";
 import QuestionnairePage from "@/pages/questionnaire";
 import SurveyAnalyticsPage from "@/pages/survey-analytics";
-import LandingPage from "@/pages/landing-page";
+import LandingPage from "@/pages/landing-page-v1";
 
 function AppRouter() {
   const [location] = useLocation();
