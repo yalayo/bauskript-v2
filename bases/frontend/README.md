@@ -14,7 +14,7 @@ npx tailwindcss -i ./ui/index.css -o ./resources/public/css/index.css --watch
 Babel
 Use this command to translate the jsx, tsx, ts code to js (you can adapt it later to your project)
 Open a terminal and run the following command:
-npx babel ./ui --out-dir ./js --extensions ".ts,.tsx,.jsx" --ignore "node_modules" --watch
+npx babel ../../client/src --out-dir ./js --extensions ".ts,.tsx,.jsx" --ignore "node_modules" --watch
 
 ## Access the frontend
 There are three different sections. You can open each of them with the following links
