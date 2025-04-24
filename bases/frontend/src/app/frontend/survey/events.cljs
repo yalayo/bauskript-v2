@@ -1,8 +1,8 @@
 (ns app.frontend.survey.events
   (:require [re-frame.core :as re-frame :refer [after]]
             [cljs.reader]
-            [app.frontend.config :as config]
-            [app.frontend.db :as db]
+            [app.frontend.common.config :as config]
+            [app.frontend.common.db :as db]
             [day8.re-frame.tracing :refer-macros [fn-traced]]
             [day8.re-frame.http-fx]
             [ajax.edn :as ajax-edn]))
