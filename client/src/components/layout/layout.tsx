@@ -1,7 +1,7 @@
 import { useState, ReactNode } from "react";
 import { Sidebar } from "./sidebar";
 import { MobileNav } from "./mobile-nav";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "../../hooks/use-auth";
 
 interface LayoutProps {
   children: ReactNode;

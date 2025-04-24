@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Attendance, Project } from "@shared/schema";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "../../components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { useState } from "react";
 
 interface AttendanceListProps {

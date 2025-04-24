@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { BlogPost } from "@shared/schema";
-import { Button } from "@/components/ui/button";
+import { Button } from "../../components/ui/button";
 import { 
   Table, 
   TableBody, 
@@ -8,24 +8,24 @@ import {
   TableHead, 
   TableHeader, 
   TableRow 
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+} from "../../components/ui/table";
+import { Badge } from "../../components/ui/badge";
 import { 
   Dialog, 
   DialogContent, 
   DialogHeader, 
   DialogTitle,
   DialogTrigger 
-} from "@/components/ui/dialog";
+} from "../../components/ui/dialog";
 import { 
   DropdownMenu, 
   DropdownMenuContent,
   DropdownMenuItem, 
   DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu";
-import { useToast } from "@/hooks/use-toast";
+} from "../../components/ui/dropdown-menu";
+import { useToast } from "../../hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "../../lib/queryClient";
 import BlogEditor from "./blog-editor";
 
 interface BlogListProps {

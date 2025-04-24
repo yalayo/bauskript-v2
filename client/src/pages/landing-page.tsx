@@ -4,12 +4,10 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "../components/ui/card";
 import { Progress } from "../components/ui/progress";
 import { useToast } from "../hooks/use-toast";
-import { apiRequest, queryClient } from "../lib/queryClient";
 import { z } from "zod";
 import { SurveyQuestion, insertSurveyResponseSchema } from "@shared/schema";
-import { useQuery } from "@tanstack/react-query";
 
-export default function LandingPage() {
+export default function LandingPage(props) {
   const [currentStep, setCurrentStep] = useState<"intro" | "survey" | "contact" | "thanks">("intro");
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<Record<number, boolean>>({});
@@ -23,10 +21,13 @@ export default function LandingPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
+  const questions = props.questions;
+  const isLoading = props.isLoading;
+
   // Fetch survey questions
-  const { data: questions = [], isLoading } = useQuery<SurveyQuestion[]>({
+  /*const { data: questions = [], isLoading } = useQuery<SurveyQuestion[]>({
     queryKey: ["/api/survey-questions"],
-  });
+  });*/
 
   const progress = currentQuestion / questions.length * 100;
   

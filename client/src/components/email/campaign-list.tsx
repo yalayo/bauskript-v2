@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
+import { apiRequest, queryClient, getQueryFn } from "../../lib/queryClient";
 import { EmailCampaign } from "@shared/schema";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/use-auth";
-import { Button } from "@/components/ui/button";
+import { useToast } from "../../hooks/use-toast";
+import { useAuth } from "../../hooks/use-auth";
+import { Button } from "../../components/ui/button";
 import { Trash2, PauseCircle, PlayCircle, Calendar, ExternalLink, Eye, Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import {
@@ -14,7 +14,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "../../components/ui/table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,8 +25,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
+} from "../../components/ui/alert-dialog";
+import { Badge } from "../../components/ui/badge";
 
 export default function CampaignList() {
   const { toast } = useToast();

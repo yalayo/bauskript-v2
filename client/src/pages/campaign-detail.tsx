@@ -2,23 +2,23 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { EmailCampaign } from "@shared/schema";
-import { Button } from "@/components/ui/button";
+import { Button } from "../components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
+} from "../components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { Separator } from "../components/ui/separator";
+import { Badge } from "../components/ui/badge";
+import { useToast } from "../hooks/use-toast";
 import { Loader2, ArrowLeft, BarChart3, Play, Pause, Calendar, CheckCircle2, UserRound, UserPlus, PlayCircle, StopCircle, RotateCw } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import CampaignProcessingInfo from "@/components/email/campaign-processing-info";
-import ContactsCampaignAssign from "@/components/email/contacts-campaign-assign";
-import CampaignContactsList from "@/components/email/campaign-contacts-list";
+import { apiRequest, queryClient } from "../lib/queryClient";
+import CampaignProcessingInfo from "../components/email/campaign-processing-info";
+import ContactsCampaignAssign from "../components/email/contacts-campaign-assign";
+import CampaignContactsList from "../components/email/campaign-contacts-list";
 
 export default function CampaignDetail() {
   const { id } = useParams();

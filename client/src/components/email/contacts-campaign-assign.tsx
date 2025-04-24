@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { useToast } from "@/hooks/use-toast";
-import { Input } from "@/components/ui/input";
+import { apiRequest } from "../../lib/queryClient";
+import { Button } from "../../components/ui/button";
+import { Checkbox } from "../../components/ui/checkbox";
+import { useToast } from "../../hooks/use-toast";
+import { Input } from "../../components/ui/input";
 import {
   Card,
   CardContent,
@@ -12,7 +12,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "../../components/ui/card";
 import { 
   Table, 
   TableBody, 
@@ -20,7 +20,7 @@ import {
   TableHead, 
   TableHeader, 
   TableRow 
-} from "@/components/ui/table";
+} from "../../components/ui/table";
 import { 
   Pagination, 
   PaginationContent, 
@@ -28,7 +28,7 @@ import {
   PaginationLink, 
   PaginationNext, 
   PaginationPrevious 
-} from "@/components/ui/pagination";
+} from "../../components/ui/pagination";
 import { Loader2, RefreshCw, Search } from "lucide-react";
 
 interface ContactsCampaignAssignProps {

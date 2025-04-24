@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "../components/ui/button";
 import {
   Card,
   CardContent,
@@ -7,9 +7,9 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAuth } from "@/hooks/use-auth";
+} from "../components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { useAuth } from "../hooks/use-auth";
 import { Loader2, PlusCircle, Mail, Send, BarChart3, AlertCircle, Upload, FileUp } from "lucide-react";
 import {
   Dialog,
@@ -18,16 +18,16 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import CampaignForm from "@/components/email/campaign-form";
-import CampaignList from "@/components/email/campaign-list";
-import ContactForm from "@/components/email/contact-form";
-import ContactsList from "@/components/email/contacts-list";
-import BulkContactsImport from "@/components/email/bulk-contacts-import";
+} from "../components/ui/dialog";
+import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
+import CampaignForm from "../components/email/campaign-form";
+import CampaignList from "../components/email/campaign-list";
+import ContactForm from "../components/email/contact-form";
+import ContactsList from "../components/email/contacts-list";
+import BulkContactsImport from "../components/email/bulk-contacts-import";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { EmailCampaign } from "@shared/schema";
-import { getQueryFn } from "@/lib/queryClient";
+import { getQueryFn } from "../lib/queryClient";
 import { useLocation } from "wouter";
 
 export default function EmailCampaigns() {

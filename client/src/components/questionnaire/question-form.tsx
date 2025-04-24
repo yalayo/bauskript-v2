@@ -3,13 +3,13 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
-import { FormField, FormItem, FormLabel, FormControl, FormMessage, Form } from "@/components/ui/form";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Skeleton } from "@/components/ui/skeleton";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { Progress } from "@/components/ui/progress";
+import { Button } from "../../components/ui/button";
+import { FormField, FormItem, FormLabel, FormControl, FormMessage, Form } from "../../components/ui/form";
+import { RadioGroup, RadioGroupItem } from "../../components/ui/radio-group";
+import { Skeleton } from "../../components/ui/skeleton";
+import { apiRequest, queryClient } from "../../lib/queryClient";
+import { useToast } from "../../hooks/use-toast";
+import { Progress } from "../../components/ui/progress";
 
 // Types
 type SurveyQuestion = {

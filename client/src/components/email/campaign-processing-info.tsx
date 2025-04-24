@@ -5,10 +5,10 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
+} from "../../components/ui/card";
+import { Progress } from "../../components/ui/progress";
+import { Separator } from "../../components/ui/separator";
+import { Badge } from "../../components/ui/badge";
 import { Loader2, User, Building2, Mail, Phone } from "lucide-react";
 
 interface CampaignProcessingInfoProps {

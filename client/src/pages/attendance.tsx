@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "../hooks/use-auth";
 import { Project } from "@shared/schema";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import AttendanceForm from "@/components/attendance/attendance-form";
-import AttendanceList from "@/components/attendance/attendance-list";
+import { Button } from "../components/ui/button";
+import { Card, CardContent } from "../components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import AttendanceForm from "../components/attendance/attendance-form";
+import AttendanceList from "../components/attendance/attendance-list";
 
 export default function AttendancePage() {
   const { user } = useAuth();

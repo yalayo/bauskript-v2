@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Project } from "@shared/schema";
-import { StatsCard } from "@/components/dashboard/stats-card";
-import { ProjectProgress } from "@/components/dashboard/project-progress";
-import { WeatherWidget } from "@/components/dashboard/weather-widget";
-import { RecentReports } from "@/components/dashboard/recent-reports";
-import { RecentIssues } from "@/components/dashboard/recent-issues";
+import { StatsCard } from "../components/dashboard/stats-card";
+import { ProjectProgress } from "../components/dashboard/project-progress";
+import { WeatherWidget } from "../components/dashboard/weather-widget";
+import { RecentReports } from "../components/dashboard/recent-reports";
+import { RecentIssues } from "../components/dashboard/recent-issues";
 
 export default function Dashboard() {
   // Fetch projects data

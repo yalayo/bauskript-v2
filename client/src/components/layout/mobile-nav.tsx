@@ -3,7 +3,7 @@ import {
   Sheet,
   SheetContent,
   SheetTrigger
-} from "@/components/ui/sheet";
+} from "../../components/ui/sheet";
 
 export const MobileNav = () => {
   const [location] = useLocation();
