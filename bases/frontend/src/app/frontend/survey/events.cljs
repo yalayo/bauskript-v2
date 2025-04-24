@@ -5,7 +5,8 @@
             [app.frontend.common.db :as db]
             [day8.re-frame.tracing :refer-macros [fn-traced]]
             [day8.re-frame.http-fx]
-            [ajax.edn :as ajax-edn]))
+            [ajax.edn :as ajax-edn]
+            [ajax.core :as ajax]))
 
 ;; Initializing
 ;; Interceptors
@@ -30,9 +31,10 @@
  (fn-traced [{:keys [local-store-db]} _]
             (if (empty? local-store-db)
               {:http-xhrio {:method          :get
-                            :uri             (str config/api-url "/api/questions")
+                            :uri             (str config/api-url "/api/survey-questions")
                             :timeout         8000
-                            :response-format (ajax-edn/edn-response-format)
+                            :response-format (ajax/json-response-format {:keywords? true})
+                            :headers         {"Accept" "application/json"}
                             :on-success      [::set-initial-db]
                             :on-failure      [::handle-init-db-error]}}
               {:db local-store-db})))
