@@ -6,7 +6,7 @@
 
 (defn ^:dev/after-load mount-root []
   (re-frame/clear-subscription-cache!)
-  (let [root-el (.getElementById js/document "app")]
+  (let [root-el (.getElementById js/document "survey")]
     (rdom/unmount-component-at-node root-el)
     (rdom/render [views/app] root-el)))
 
