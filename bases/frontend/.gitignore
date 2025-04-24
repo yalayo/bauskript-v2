@@ -1,0 +1,9 @@
+node_modules
+out
+.wrangler/
+.shadow-cljs/
+.nrepl-port
+
+# Frontend code
+resources/public/js/
+js/
