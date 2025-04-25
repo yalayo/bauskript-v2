@@ -2,6 +2,11 @@
   (:require [re-frame.core :as re-frame]))
 
 (re-frame/reg-sub
+ ::loading?
+ (fn [db _]
+   (get-in db [:survey :loading?])))
+
+(re-frame/reg-sub
  ::questions
  (fn [db]
    (get-in db [:survey :questions])))

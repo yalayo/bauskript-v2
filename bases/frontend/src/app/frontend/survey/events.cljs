@@ -30,14 +30,15 @@
  [(re-frame/inject-cofx :local-store-db)]
  (fn-traced [{:keys [local-store-db]} _]
             (if (empty? local-store-db)
-              {:http-xhrio {:method          :get
+              {:db (assoc-in local-store-db [:survey :loading?] true)
+               :http-xhrio {:method          :get
                             :uri             (str config/api-url "/api/survey-questions")
                             :timeout         8000
                             :response-format (ajax/json-response-format {:keywords? true})
                             :headers         {"Accept" "application/json"}
                             :on-success      [::set-initial-db]
                             :on-failure      [::handle-init-db-error]}}
-              {:db local-store-db})))
+              {:db (assoc-in local-store-db [:survey :loading?] false)})))
 
 (defn initialize-responses [questions]
   (into {} (map (fn [k] [(keyword (:id k)) true]) questions)))
@@ -51,7 +52,8 @@
                 (assoc-in [:survey :current-question-index] 0)
                 (assoc-in [:survey :show-email-form] false)
                 (assoc-in [:survey :responses] (initialize-responses questions))
-                (assoc :current-view "survey"))))
+                (assoc :current-view "survey")
+                (assoc-in [:survey :loading?] false)))) ;; Done loading
 
 (re-frame/reg-event-fx
  ::handle-init-db-error
