@@ -64,15 +64,17 @@
 (re-frame/reg-event-db
  ::answer-question
  [->local-store]
- (fn [db [_ val]] 
-   (let [index (get-in db [:survey :current-question-index])
-         questions (get-in db [:survey :questions])
-         current-question (nth questions index)
-         id (keyword (str (:orderIndex current-question)))
-         new-db (assoc-in db [:survey :responses id] val)]
-     (if (< index (dec (count questions)))
-       (assoc-in new-db [:survey :current-question-index] (inc index))
-       (assoc-in new-db [:survey :current-step] "contact")))))
+ (fn [db [_ val]]
+   (if (< (index total)) 
+     (let [index (get-in db [:survey :current-question-index])
+           questions (get-in db [:survey :questions])
+           total (count questions)
+           current-question (nth questions index)
+           id (keyword (str (:orderIndex current-question)))
+           new-db (assoc-in db [:survey :responses id] val)]
+       (println "Index: " index " Total: " total)
+       (assoc-in new-db [:survey :current-question-index] (inc index)))
+     (assoc-in db [:survey :current-step] "contact"))))
 
 (re-frame/reg-event-db
  ::next-question
@@ -80,7 +82,8 @@
  (fn [db]
    (let [index (get-in db [:survey :current-question-index])
          total (count (get-in db [:survey :questions]))]
-     (if (< index (dec total))
+     (println "Index: " index " Total: " total)
+     (if (< (inc index) total)
        (assoc-in db [:survey :current-question-index] (inc index))
        (assoc-in db [:survey :current-step] "contact")))))
 
@@ -97,7 +100,7 @@
        (assoc-in db [:survey :current-question-index] (dec index))))))
 
 (re-frame/reg-event-db
- ::update-email-form
+ ::update-field
  [->local-store]
  (fn [db [_ id val]]
    (assoc-in db [:survey :form id] val)))
