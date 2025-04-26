@@ -50,9 +50,7 @@
             (-> db
                 (assoc-in [:survey :questions] questions)
                 (assoc-in [:survey :current-question-index] 0)
-                (assoc-in [:survey :show-email-form] false)
                 (assoc-in [:survey :responses] (initialize-responses questions))
-                (assoc :current-view "survey")
                 (assoc-in [:survey :loading?] false)))) ;; Done loading
 
 (re-frame/reg-event-fx
