@@ -16,10 +16,10 @@
          [survey {:id "survey"
                   :isLoading false
                   :questions @(re-frame/subscribe [::subs/questions])
-                  :currentQuestionIndex @(re-frame/subscribe [::subs/current-question-index])
+                  :currentQuestion @(re-frame/subscribe [::subs/current-question-index])
                   :currentQuestionResponse @(re-frame/subscribe [::subs/current-question-response])
                   :showEmailForm @(re-frame/subscribe [::subs/show-email-form])
-                  :handleAnswerSelection #(re-frame/dispatch [::survey-events/answer-question %])
+                  :handleAnswer #(re-frame/dispatch [::survey-events/answer-question %])
                   :handleNext #(re-frame/dispatch [::survey-events/next-question])
                   :handlePrevious #(re-frame/dispatch [::survey-events/previous-question])
                   :isEmailFormPending @(re-frame/subscribe [::subs/email-form-pending])

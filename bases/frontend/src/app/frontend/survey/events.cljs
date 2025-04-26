@@ -41,7 +41,7 @@
               {:db (assoc-in local-store-db [:survey :loading?] false)})))
 
 (defn initialize-responses [questions]
-  (into {} (map (fn [k] [(keyword (:id k)) true]) questions)))
+  (into {} (map (fn [k] [(keyword (str (:orderIndex k))) true]) questions)))
 
 (re-frame/reg-event-db
  ::set-initial-db
@@ -64,12 +64,15 @@
 (re-frame/reg-event-db
  ::answer-question
  [->local-store]
- (fn [db [_ val]]
+ (fn [db [_ val]] 
    (let [index (get-in db [:survey :current-question-index])
          questions (get-in db [:survey :questions])
          current-question (nth questions index)
-         id (keyword (:id current-question))]
-     (assoc-in db [:survey :responses id] val))))
+         id (keyword (str (:orderIndex current-question)))
+         new-db (assoc-in db [:survey :responses id] val)]
+     (if (< index (dec (count questions)))
+       (assoc-in new-db [:survey :current-question-index] (inc index))
+       (assoc-in new-db [:survey :current-step] "contact")))))
 
 (re-frame/reg-event-db
  ::next-question

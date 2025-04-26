@@ -9,8 +9,12 @@ import { z } from "zod";
 import { SurveyQuestion, insertSurveyResponseSchema } from "@shared/schema";
 
 export default function LandingPage(props) {
+  const questions = props.questions;
+  const currentQuestion = props.currentQuestion;
+  const currentQuestionResponse = props.currentQuestionResponse;
+  const isLoading = props.isLoading;
+
   const [currentStep, setCurrentStep] = useState<"intro" | "survey" | "contact" | "thanks">("intro");
-  const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<Record<number, boolean>>({});
   const [contactInfo, setContactInfo] = useState({
     email: "",
@@ -22,9 +26,6 @@ export default function LandingPage(props) {
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
-  const questions = props.questions;
-  const isLoading = props.isLoading;
-
   // Fetch survey questions
   /*const { data: questions = [], isLoading } = useQuery<SurveyQuestion[]>({
     queryKey: ["/api/survey-questions"],
@@ -33,7 +34,8 @@ export default function LandingPage(props) {
   const progress = currentQuestion / questions.length * 100;
   
   // Handle answer selection for current question
-  const handleAnswer = (answer: boolean) => {
+  const handleAnswer = props.handleAnswer;
+  /*const handleAnswer = (answer: boolean) => {
     setAnswers({ ...answers, [questions[currentQuestion].id]: answer });
     
     if (currentQuestion < questions.length - 1) {
@@ -41,7 +43,7 @@ export default function LandingPage(props) {
     } else {
       setCurrentStep("contact");
     }
-  };
+  };*/
   
   // Handle contact info form submission
   const handleSubmitContact = async (e: React.FormEvent) => {
