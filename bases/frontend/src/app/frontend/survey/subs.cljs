@@ -47,3 +47,8 @@
  ::current-view
  (fn [db]
    (:current-view db)))
+
+(re-frame/reg-sub
+ ::current-step
+ (fn [db]
+   (get-in db [:survey :current-step] "intro")))

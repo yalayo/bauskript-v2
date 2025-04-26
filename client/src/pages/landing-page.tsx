@@ -11,10 +11,9 @@ import { SurveyQuestion, insertSurveyResponseSchema } from "@shared/schema";
 export default function LandingPage(props) {
   const questions = props.questions;
   const currentQuestion = props.currentQuestion;
-  const currentQuestionResponse = props.currentQuestionResponse;
   const isLoading = props.isLoading;
 
-  const [currentStep, setCurrentStep] = useState<"intro" | "survey" | "contact" | "thanks">("intro");
+  const currentStep = props.currentStep;
   const [answers, setAnswers] = useState<Record<number, boolean>>({});
   const [contactInfo, setContactInfo] = useState({
     email: "",
@@ -204,7 +203,7 @@ export default function LandingPage(props) {
             </Button>
             <Button 
               variant="ghost"
-              disabled={currentQuestion === questions.length - 1}
+              disabled={currentQuestion === questions.length}
               onClick={props.handleNext}
             >
               Next
@@ -237,8 +236,8 @@ export default function LandingPage(props) {
                   type="email"
                   required
                   className="w-full p-2 border rounded-md"
-                  value={contactInfo.email}
-                  onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
+                  defaultValue={props.email}
+                  onBlur={props.onChangeEmail}
                 />
               </div>
               
@@ -250,8 +249,8 @@ export default function LandingPage(props) {
                   id="name"
                   type="text"
                   className="w-full p-2 border rounded-md"
-                  value={contactInfo.name}
-                  onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
+                  defaultValue={props.name}
+                  onBlur={props.onChangeName}
                 />
               </div>
               
@@ -263,8 +262,8 @@ export default function LandingPage(props) {
                   id="company"
                   type="text"
                   className="w-full p-2 border rounded-md"
-                  value={contactInfo.company}
-                  onChange={(e) => setContactInfo({ ...contactInfo, company: e.target.value })}
+                  defaultValue={props.company}
+                  onBlur={props.onChangeCompany}
                 />
               </div>
               
@@ -276,8 +275,8 @@ export default function LandingPage(props) {
                   id="phone"
                   type="tel"
                   className="w-full p-2 border rounded-md"
-                  value={contactInfo.phone}
-                  onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
+                  defaultValue={props.phone}
+                  onBlur={props.onChangePhone}
                 />
               </div>
               
