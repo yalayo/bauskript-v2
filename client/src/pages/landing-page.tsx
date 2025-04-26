@@ -198,26 +198,16 @@ export default function LandingPage(props) {
             <Button 
               variant="ghost" 
               disabled={currentQuestion === 0}
-              onClick={() => setCurrentQuestion(currentQuestion - 1)}
+              onClick={props.handlePrevious}
             >
               Previous
             </Button>
             <Button 
               variant="ghost"
               disabled={currentQuestion === questions.length - 1}
-              onClick={() => {
-                if (answers[questions[currentQuestion].id] === undefined) {
-                  toast({
-                    title: "Please answer the question",
-                    description: "Select either Yes or No to continue",
-                    variant: "destructive",
-                  });
-                  return;
-                }
-                setCurrentQuestion(currentQuestion + 1);
-              }}
+              onClick={props.handleNext}
             >
-              Skip
+              Next
             </Button>
           </CardFooter>
         </Card>

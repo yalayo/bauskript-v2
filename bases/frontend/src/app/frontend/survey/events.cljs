@@ -80,24 +80,21 @@
  (fn [db]
    (let [index (get-in db [:survey :current-question-index])
          total (count (get-in db [:survey :questions]))]
-     (if (>= index (dec total))
-       (-> db
-           (assoc-in [:survey :show-email-form] true)
-           #_(assoc-in [:survey :current-question-index] (inc index)))
-       (assoc-in db [:survey :current-question-index] (inc index))))))
+     (if (< index (dec total))
+       (assoc-in db [:survey :current-question-index] (inc index))
+       (assoc-in db [:survey :current-step] "contact")))))
 
 (re-frame/reg-event-db
  ::previous-question
  [->local-store]
  (fn [db]
    (let [index (get-in db [:survey :current-question-index])
-         show-email-form? (get-in db [:survey :show-email-form])]
-     (when (pos? index)
-       (if (and (<= index 20) show-email-form?)
-         (-> db
-             (assoc-in [:survey :show-email-form] false)
-             (assoc-in [:survey :current-question-index] (dec index)))
-         (assoc-in db [:survey :current-question-index] (dec index)))))))
+         current-step (get-in db [:survey :current-step])]
+     (if (= current-step "contact")
+       (-> db
+           (assoc-in [:survey :current-question-index] (dec index))
+           (assoc-in [:survey :current-step] "survey"))
+       (assoc-in db [:survey :current-question-index] (dec index))))))
 
 (re-frame/reg-event-db
  ::update-email-form
