@@ -41,7 +41,7 @@
               {:db (assoc-in local-store-db [:survey :loading?] false)})))
 
 (defn initialize-responses [questions]
-  (into {} (map (fn [k] [(keyword (str (:orderIndex k))) true]) questions)))
+  (into {} (map (fn [k] [(keyword (str (:id k))) true]) questions)))
 
 (re-frame/reg-event-db
  ::set-initial-db
@@ -103,33 +103,45 @@
  (fn [db [_ id val]]
    (assoc-in db [:survey :form id] val)))
 
+(defn adapt-data [data]
+  (->> data
+       (keys)
+       (sort)
+       (map (fn [k]
+              (let [n (js/parseInt (name k))]
+                {:questionId n
+                 :answer (odd? n)})))
+       vec))
+
 (re-frame/reg-event-fx
  ::save-survey
  (fn [{:keys [db]} _]
-   (let [survey-data {:responses (get-in db [:survey :responses])
-                      :email (get-in db [:survey :form :email])}]
+   (let [survey-data {:email (get-in db [:survey :form :email])
+                      :name (get-in db [:survey :form :name])
+                      :company (get-in db [:survey :form :company])
+                      :phone (get-in db [:survey :form :phone])
+                      :answers (adapt-data (get-in db [:survey :responses]))}]
      {:http-xhrio {:method          :post
-                   :uri             (str config/api-url "/api/survey")
+                   :uri             (str config/api-url "/api/survey-responses")
                    :params          survey-data
-                   :format          (ajax-edn/edn-request-format)
-                   :response-format (ajax-edn/edn-response-format)
+                   :format          (ajax/json-request-format) 
+                   :response-format (ajax/json-response-format {:keywords? true})
                    :timeout         8000
                    :on-success      [::survey-submitted]
-                   :on-failure      [::survey-submitt-error]}})))
+                   :on-failure      [::survey-submission-error]}})))
 
 (re-frame/reg-event-db
  ::survey-submitted
  [->local-store]
  (fn [db [_ response]]
+   (println "Response: " response)
    (let [email (get-in db [:survey :form :email])]
      (-> db
          (assoc-in [:survey :current-question-index] 0)
-         (assoc-in [:survey :show-email-form] false)
-         (assoc-in [:waiting-list :email] email)
-         (assoc :current-view "waiting-list")))))
+         (assoc-in [:survey :current-step] "thanks")))))
 
 (re-frame/reg-event-fx
- ::handle-init-db-error
+ ::survey-submission-error
  (fn [{:keys [_]} [_ error]]
    (js/console.error "Failed to submitt survey:" error)
    {}))

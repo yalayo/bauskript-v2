@@ -280,7 +280,7 @@ export default function LandingPage(props) {
                 />
               </div>
               
-              <Button type="submit" className="w-full mt-6">
+              <Button className="w-full mt-6" onClick={props.handleSubmit}>
                 Submit Survey
               </Button>
             </form>
