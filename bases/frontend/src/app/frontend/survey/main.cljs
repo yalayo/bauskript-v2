@@ -5,9 +5,7 @@
             [app.frontend.survey.views :as views]))
 
 (defn ^:dev/after-load mount-root []
-  (js/console.log "Mount called")
   (let [root-el (.getElementById js/document "survey")]
-    (println "Root: " root-el)
     (if root-el
       (do
         (re-frame/clear-subscription-cache!)
@@ -19,7 +17,5 @@
 (defn init []
   (re-frame/dispatch-sync [::events/initialize-db])
   (let [monted? (mount-root)]
-    (js/console.log "Mounted: " monted?)
     (when-not monted?
-      (js/console.log "Let's wait!!")
       (js/setTimeout mount-root 100))) )
